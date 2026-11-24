@@ -6,6 +6,16 @@ import time
 import uuid
 
 from pathlib import Path
+import os
+
+from content_analysis import analyze_chunk, plan_bitrate
+import scheduler as scheduler_module
+from scheduler import (
+    QUEUE_CAPACITY,
+    SCHEDULER_MODE,
+    choose_worker,
+    priority_for,
+)
 
 from fastapi import (
     FastAPI,
@@ -115,8 +125,71 @@ def init():
             cpu INTEGER,
             gpu TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS scheduler_decisions(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id TEXT,
+            job_id TEXT,
+            chunk INTEGER,
+            profile TEXT,
+            complexity REAL,
+            priority REAL,
+            mode TEXT,
+            selected_worker TEXT,
+            score REAL,
+            candidates TEXT,
+            created REAL
+        );
         """
     )
+
+    migrations = {
+        "jobs": [
+            ("upload_time", "REAL"),
+            ("chunking_time", "REAL"),
+            ("analysis_time", "REAL"),
+            ("started_at", "REAL"),
+            ("completed_at", "REAL"),
+            ("scheduler_mode", "TEXT"),
+        ],
+        "tasks": [
+            ("complexity", "REAL"),
+            ("motion", "REAL"),
+            ("spatial", "REAL"),
+            ("priority", "REAL"),
+            ("target_bitrate", "INTEGER"),
+            ("queue_time", "REAL"),
+            ("download_time", "REAL"),
+            ("processing_time", "REAL"),
+            ("upload_time", "REAL"),
+            ("completed_at", "REAL"),
+        ],
+        "workers": [
+            ("ram", "REAL"),
+            ("cpu_usage", "REAL"),
+            ("gpu_usage", "REAL"),
+            ("queue_depth", "INTEGER"),
+            ("max_queue", "INTEGER"),
+            ("network_cost", "REAL"),
+            ("tasks_completed", "INTEGER DEFAULT 0"),
+            ("tasks_failed", "INTEGER DEFAULT 0"),
+            ("tasks_recovered", "INTEGER DEFAULT 0"),
+        ],
+    }
+
+    for table, columns in migrations.items():
+        existing = {
+            row["name"]
+            for row in connection.execute(
+                f"PRAGMA table_info({table})"
+            )
+        }
+        for name, definition in columns:
+            if name not in existing:
+                connection.execute(
+                    f"ALTER TABLE {table} "
+                    f"ADD COLUMN {name} {definition}"
+                )
 
     connection.commit()
     connection.close()
@@ -198,7 +271,10 @@ async def register(
     connection.execute(
         """
         INSERT INTO workers
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        (id, name, host, status, last_seen, active, cpu, gpu,
+         ram, cpu_usage, gpu_usage, queue_depth, max_queue,
+         network_cost)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
         ON CONFLICT(id) DO UPDATE SET
             name=excluded.name,
@@ -206,7 +282,9 @@ async def register(
             status='idle',
             last_seen=excluded.last_seen,
             cpu=excluded.cpu,
-            gpu=excluded.gpu
+            gpu=excluded.gpu,
+            ram=COALESCE(excluded.ram, workers.ram),
+            max_queue=COALESCE(excluded.max_queue, workers.max_queue)
         """,
         (
             worker_id,
@@ -225,10 +303,13 @@ async def register(
                 "cpu",
                 1
             ),
-            data.get(
-                "gpu",
-                "unknown"
-            ),
+            data.get("gpu", "unknown"),
+            data.get("ram"),
+            data.get("cpu_usage", 0),
+            data.get("gpu_usage", 0),
+            data.get("queue_depth", 0),
+            data.get("max_queue", QUEUE_CAPACITY),
+            data.get("network_cost", 0),
         ),
     )
 
@@ -259,7 +340,13 @@ async def heartbeat(
         SET
             status=?,
             last_seen=?,
-            active=?
+            active=?,
+            cpu_usage=?,
+            gpu_usage=?,
+            ram=?,
+            queue_depth=?,
+            network_cost=?,
+            gpu=COALESCE(?, gpu)
         WHERE id=?
         """,
         (
@@ -269,6 +356,12 @@ async def heartbeat(
             ),
             time.time(),
             data.get("active"),
+            data.get("cpu_usage", 0),
+            data.get("gpu_usage", 0),
+            data.get("ram"),
+            data.get("queue_depth", 0),
+            data.get("network_cost", 0),
+            data.get("gpu"),
             wid,
         ),
     )
@@ -279,6 +372,62 @@ async def heartbeat(
     return {
         "ok": True
     }
+
+
+@app.get("/api/scheduler/status")
+def scheduler_status():
+    connection = db()
+    mode = os.getenv("SCHEDULER_MODE", "intelligent")
+    queued = connection.execute(
+        "SELECT COUNT(*) FROM tasks WHERE status='queued'"
+    ).fetchone()[0]
+    assigned = connection.execute(
+        "SELECT COUNT(*) FROM tasks WHERE status!='queued' AND status!='completed'"
+    ).fetchone()[0]
+    decisions = connection.execute(
+        "SELECT COUNT(*) FROM scheduler_decisions"
+    ).fetchone()[0]
+    connection.close()
+    return {
+        "mode": mode,
+        "queue_capacity": QUEUE_CAPACITY,
+        "queued_tasks": queued,
+        "active_tasks": assigned,
+        "decisions": decisions,
+        "formula": "0.25P + 0.30K - 0.20L - 0.15Q - 0.10N",
+    }
+
+
+@app.post("/api/scheduler/mode")
+async def scheduler_mode(request: Request):
+    data = await request.json()
+    mode = str(data.get("mode", "intelligent")).lower()
+    if mode not in ("baseline", "intelligent"):
+        raise HTTPException(status_code=400, detail="Mode must be baseline or intelligent")
+
+    os.environ["SCHEDULER_MODE"] = mode
+    scheduler_module.SCHEDULER_MODE = mode
+    return {"mode": mode}
+
+
+@app.get("/api/scheduler/decisions")
+def scheduler_decisions(limit: int = 100):
+    connection = db()
+    rows = connection.execute(
+        """
+        SELECT * FROM scheduler_decisions
+        ORDER BY created DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    connection.close()
+    result = []
+    for row in rows:
+        item = dict(row)
+        item["candidates"] = json.loads(item["candidates"] or "[]")
+        result.append(item)
+    return result
 
 
 # ============================================================
@@ -313,7 +462,18 @@ def job(jid: str):
             status,
             worker,
             attempts,
-            error
+            error,
+            complexity,
+            motion,
+            spatial,
+            priority,
+            target_bitrate,
+            queue_time,
+            download_time,
+            processing_time,
+            upload_time,
+            started,
+            completed_at
         FROM tasks
         WHERE job_id=?
         ORDER BY chunk, profile
@@ -335,6 +495,92 @@ def job(jid: str):
     ]
 
     return result
+
+
+@app.get("/api/jobs/{jid}/analysis")
+def job_analysis(jid: str):
+    connection = db()
+    rows = connection.execute(
+        """
+        SELECT chunk, AVG(motion) AS motion, AVG(spatial) AS spatial,
+               AVG(complexity) AS complexity, AVG(priority) AS priority,
+               AVG(target_bitrate) AS target_bitrate
+        FROM tasks
+        WHERE job_id=?
+        GROUP BY chunk
+        ORDER BY chunk
+        """,
+        (jid,),
+    ).fetchall()
+    connection.close()
+
+    chunks = []
+    for row in rows:
+        complexity = row["complexity"] or 0.0
+        level = (
+            "LOW" if complexity < 0.30
+            else "MEDIUM" if complexity < 0.60
+            else "HIGH" if complexity < 0.80
+            else "VERY_HIGH"
+        )
+        chunks.append({
+            "chunk_id": f"C{row['chunk'] + 1}",
+            "chunk": row["chunk"],
+            "motion": round(row["motion"] or 0.0, 4),
+            "spatial": round(row["spatial"] or 0.0, 4),
+            "complexity": round(complexity, 4),
+            "level": level,
+            "priority": round(row["priority"] or 0.0, 4),
+            "target_bitrate": round(row["target_bitrate"] or 0),
+            "formula": "0.6M + 0.4S (saliency unavailable)",
+        })
+    return {"job_id": jid, "chunks": chunks}
+
+
+@app.get("/api/jobs/{jid}/metrics")
+def job_metrics(jid: str):
+    connection = db()
+    job = connection.execute(
+        "SELECT * FROM jobs WHERE id=?",
+        (jid,),
+    ).fetchone()
+    if not job:
+        connection.close()
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    task_metrics = connection.execute(
+        """
+        SELECT
+            COUNT(*) AS count,
+            AVG(queue_time) AS avg_queue,
+            AVG(download_time) AS avg_download,
+            AVG(processing_time) AS avg_processing,
+            AVG(upload_time) AS avg_upload
+        FROM tasks
+        WHERE job_id=?
+        """,
+        (jid,),
+    ).fetchone()
+    connection.close()
+
+    total_time = None
+    if job["completed_at"] and job["started_at"]:
+        total_time = round(job["completed_at"] - job["started_at"], 4)
+
+    return {
+        "job_id": jid,
+        "upload_time": job["upload_time"],
+        "chunking_time": job["chunking_time"],
+        "analysis_time": job["analysis_time"],
+        "total_job_time": total_time,
+        "average_queue_time": round(task_metrics["avg_queue"] or 0, 4),
+        "average_download_time": round(task_metrics["avg_download"] or 0, 4),
+        "average_processing_time": round(task_metrics["avg_processing"] or 0, 4),
+        "average_result_upload_time": round(task_metrics["avg_upload"] or 0, 4),
+        "scheduler_mode": job["scheduler_mode"],
+        "completed_tasks": job["done"],
+        "total_tasks": job["total"],
+    }
 
 
 # ============================================================
@@ -379,6 +625,7 @@ async def upload(
         "1080p,720p,480p"
     ),
 ):
+    upload_started = time.time()
 
     allowed = {
         "1080p",
@@ -426,6 +673,8 @@ async def upload(
 
             file.write(chunk)
 
+    upload_time = time.time() - upload_started
+
     # Create chunk directory
     chunk_directory = CH / job_id
 
@@ -433,6 +682,7 @@ async def upload(
         parents=True,
         exist_ok=True
     )
+    chunk_started = time.time()
 
     # Split video into approximately
     # 6-second independently processable chunks
@@ -491,6 +741,7 @@ async def upload(
             "chunk_*.mp4"
         )
     )
+    chunking_time = time.time() - chunk_started
 
     if not chunks:
 
@@ -504,12 +755,33 @@ async def upload(
         * len(selected_profiles)
     )
 
+    analysis_started = time.time()
+    chunk_analysis = []
+    for chunk_index, chunk_path in enumerate(chunks):
+        try:
+            metrics = analyze_chunk(chunk_path)
+        except Exception as error:
+            metrics = {
+                "motion": 0.0,
+                "spatial": 0.0,
+                "complexity": 0.0,
+                "level": "LOW",
+                "formula": "analysis unavailable",
+                "error": str(error)[-300:],
+            }
+        chunk_analysis.append(metrics)
+    analysis_time = time.time() - analysis_started
+
     connection = db()
 
     connection.execute(
         """
-        INSERT INTO jobs
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO jobs(
+            id, filename, source, duration, status, profiles,
+            total, done, created, upload_time, chunking_time,
+            analysis_time, started_at, scheduler_mode
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             job_id,
@@ -523,6 +795,11 @@ async def upload(
             total_tasks,
             0,
             time.time(),
+            round(upload_time, 4),
+            round(chunking_time, 4),
+            round(analysis_time, 4),
+            time.time(),
+            os.getenv("SCHEDULER_MODE", "intelligent"),
         ),
     )
 
@@ -539,9 +816,15 @@ async def upload(
                     job_id,
                     chunk,
                     chunk_path,
-                    profile
+                    profile,
+                    complexity,
+                    motion,
+                    spatial,
+                    priority,
+                    target_bitrate,
+                    status
                 )
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued')
                 """,
                 (
                     str(
@@ -551,6 +834,11 @@ async def upload(
                     chunk_index,
                     str(chunk_path),
                     profile,
+                    chunk_analysis[chunk_index]["complexity"],
+                    chunk_analysis[chunk_index]["motion"],
+                    chunk_analysis[chunk_index]["spatial"],
+                    priority_for(chunk_analysis[chunk_index]["complexity"]),
+                    plan_bitrate(profile, chunk_analysis[chunk_index]["complexity"]),
                 ),
             )
 
@@ -617,7 +905,13 @@ async def claim(
         SELECT *
         FROM tasks
         WHERE status='queued'
-        ORDER BY attempts ASC, chunk ASC
+        ORDER BY
+            CASE
+                WHEN priority IS NULL THEN 0
+                ELSE priority
+            END DESC,
+            attempts ASC,
+            chunk ASC
         LIMIT 1
         """
     ).fetchone()
@@ -632,20 +926,48 @@ async def claim(
             "task": None
         }
 
+    selected, candidates = choose_worker(connection, task)
+
+    if not selected:
+        connection.commit()
+        connection.close()
+        return {"task": None}
+
+    if selected["id"] != worker_id:
+        connection.commit()
+        connection.close()
+        return {"task": None}
+
+    now = time.time()
+    job_row = connection.execute(
+        "SELECT started_at FROM jobs WHERE id=?",
+        (task["job_id"],),
+    ).fetchone()
+    queue_time = max(
+        0,
+        now - (
+            job_row["started_at"]
+            if job_row and job_row["started_at"]
+            else now
+        ),
+    )
+
     # Atomically assign the task
     connection.execute(
         """
         UPDATE tasks
         SET
-            status='processing',
+            status='assigned',
             worker=?,
             attempts=attempts+1,
-            started=?
+            started=?,
+            queue_time=?
         WHERE id=?
         """,
         (
-            worker_id,
-            time.time(),
+            selected["id"],
+            now,
+            round(queue_time, 4),
             task["id"],
         ),
     )
@@ -662,8 +984,36 @@ async def claim(
         """,
         (
             task["id"],
-            time.time(),
-            worker_id,
+            now,
+            selected["id"],
+        ),
+    )
+
+    connection.execute(
+        "UPDATE jobs SET status='processing' WHERE id=?",
+        (task["job_id"],),
+    )
+
+    connection.execute(
+        """
+        INSERT INTO scheduler_decisions(
+            task_id, job_id, chunk, profile, complexity, priority,
+            mode, selected_worker, score, candidates, created
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            task["id"],
+            task["job_id"],
+            task["chunk"],
+            task["profile"],
+            task["complexity"],
+            task["priority"],
+            os.getenv("SCHEDULER_MODE", "intelligent"),
+            selected["id"],
+            selected["score"],
+            json.dumps(candidates),
+            now,
         ),
     )
 
@@ -676,6 +1026,9 @@ async def claim(
             "job_id": task["job_id"],
             "chunk": task["chunk"],
             "profile": task["profile"],
+            "complexity": task["complexity"],
+            "priority": task["priority"],
+            "target_bitrate": task["target_bitrate"],
             "input": (
                 f"/api/tasks/"
                 f"{task['id']}/input"
@@ -738,6 +1091,9 @@ def task_input(tid: str):
 async def complete(
     tid: str,
     output: UploadFile = File(...),
+    download_time: float = Form(0),
+    processing_time: float = Form(0),
+    upload_time: float = Form(0),
 ):
 
     connection = db()
@@ -791,11 +1147,19 @@ async def complete(
         UPDATE tasks
         SET
             status='completed',
-            output=?
+            output=?,
+            download_time=?,
+            processing_time=?,
+            upload_time=?,
+            completed_at=?
         WHERE id=?
         """,
         (
             str(output_path),
+            round(download_time, 4),
+            round(processing_time, 4),
+            round(upload_time, 4),
+            time.time(),
             tid,
         ),
     )
@@ -816,6 +1180,24 @@ async def complete(
                 time.time(),
                 task["worker"],
             ),
+        )
+
+        connection.execute(
+            """
+            UPDATE workers
+            SET tasks_failed=tasks_failed+1
+            WHERE id=?
+            """,
+            (task["worker"],),
+        )
+
+        connection.execute(
+            """
+            UPDATE workers
+            SET tasks_completed=tasks_completed+1
+            WHERE id=?
+            """,
+            (task["worker"],),
         )
 
     # Recalculate completed tasks
@@ -850,10 +1232,11 @@ async def complete(
         connection.execute(
             """
             UPDATE jobs
-            SET status='completed'
+            SET status='completed',
+                completed_at=?
             WHERE id=?
             """,
-            (task["job_id"],),
+            (time.time(), task["job_id"]),
         )
 
     connection.commit()
@@ -930,6 +1313,15 @@ async def fail(
                     time.time(),
                     task["worker"],
                 ),
+            )
+
+            connection.execute(
+                """
+                UPDATE workers
+                SET tasks_failed=tasks_failed+1
+                WHERE id=?
+                """,
+                (task["worker"],),
             )
 
         connection.commit()
@@ -1040,6 +1432,32 @@ async def make_hls(jid: str):
             playlist
         )
 
+    master_path = (
+        OUT
+        / jid
+        / "master.m3u8"
+    )
+    bandwidth = {
+        "360p": "800000",
+        "480p": "1500000",
+        "720p": "3000000",
+        "1080p": "5000000",
+    }
+    resolution = {
+        "360p": "640x360",
+        "480p": "854x480",
+        "720p": "1280x720",
+        "1080p": "1920x1080",
+    }
+    master = "#EXTM3U\n#EXT-X-VERSION:3\n"
+    for profile in profiles:
+        master += (
+            f"#EXT-X-STREAM-INF:BANDWIDTH={bandwidth.get(profile, '1000000')},"
+            f"RESOLUTION={resolution.get(profile, '1280x720')}\n"
+            f"{profile}/index.m3u8\n"
+        )
+    master_path.write_text(master)
+
     connection.close()
 
 
@@ -1074,6 +1492,17 @@ def playlist(
         media_type=(
             "application/vnd.apple.mpegurl"
         ),
+    )
+
+
+@app.get("/api/jobs/{jid}/master.m3u8")
+def master_playlist(jid: str):
+    path = OUT / jid / "master.m3u8"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Not ready")
+    return FileResponse(
+        path,
+        media_type="application/vnd.apple.mpegurl",
     )
 
 
@@ -1131,7 +1560,7 @@ async def reaper():
             """
             SELECT id, worker
             FROM tasks
-            WHERE status='processing'
+            WHERE status IN ('processing','assigned','downloading','transcoding','uploading')
             AND started<?
             """,
             (cutoff,),
@@ -1161,6 +1590,15 @@ async def reaper():
                     SET
                         status='idle',
                         active=NULL
+                    WHERE id=?
+                    """,
+                    (task["worker"],),
+                )
+
+                connection.execute(
+                    """
+                    UPDATE workers
+                    SET tasks_recovered=tasks_recovered+1
                     WHERE id=?
                     """,
                     (task["worker"],),

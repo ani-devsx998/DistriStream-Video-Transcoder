@@ -35,12 +35,35 @@ args = parser.parse_args()
 
 BASE = args.coordinator.rstrip("/")
 
-WID = str(uuid.uuid4())
-
 NAME = (
     args.name
     or socket.gethostname()
 )
+
+identity_directory = (
+    Path(tempfile.gettempdir())
+    / "dv_worker_identity"
+)
+identity_directory.mkdir(
+    parents=True,
+    exist_ok=True
+)
+identity_file = (
+    identity_directory
+    / (
+        "".join(
+            char if char.isalnum() or char in "-_" else "_"
+            for char in NAME
+        )
+        + ".id"
+    )
+)
+
+if identity_file.exists():
+    WID = identity_file.read_text().strip()
+else:
+    WID = str(uuid.uuid4())
+    identity_file.write_text(WID)
 
 WORK_DIR = (
     Path(tempfile.gettempdir())
@@ -71,6 +94,32 @@ def post(
 
 
 # ============================================================
+# GPU DETECTION
+# ============================================================
+
+def detect_gpu():
+    try:
+        result = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=name",
+                "--format=csv,noheader",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+            text=True,
+        )
+        if result.returncode == 0:
+            name = result.stdout.strip().splitlines()
+            if name:
+                return name[0]
+    except Exception:
+        pass
+    return "FFmpeg software encoder"
+
+
+# ============================================================
 # HEARTBEAT
 # ============================================================
 
@@ -85,7 +134,13 @@ def heartbeat(
             f"/api/workers/{WID}/heartbeat",
             {
                 "status": status,
-                "active": active
+                "active": active,
+                "cpu_usage": psutil.cpu_percent(interval=None),
+                "gpu_usage": 0,
+                "ram": psutil.virtual_memory().total / (1024 ** 3),
+                "queue_depth": 1 if active else 0,
+                "network_cost": 0,
+                "gpu": detect_gpu(),
             }
         )
 
@@ -104,7 +159,13 @@ post(
         "name": NAME,
         "host": socket.gethostname(),
         "cpu": psutil.cpu_count() or 1,
-        "gpu": "FFmpeg software encoder"
+        "gpu": detect_gpu(),
+        "ram": psutil.virtual_memory().total / (1024 ** 3),
+        "cpu_usage": psutil.cpu_percent(interval=None),
+        "gpu_usage": 0,
+        "queue_depth": 0,
+        "max_queue": 5,
+        "network_cost": 0,
     }
 ).raise_for_status()
 
@@ -218,6 +279,9 @@ while True:
             task["profile"]
         ]
 
+        if task.get("target_bitrate"):
+            bitrate = f"{task['target_bitrate']}k"
+
 
         # ----------------------------------------------------
         # DOWNLOAD CHUNK
@@ -229,6 +293,7 @@ while True:
             f"{task['chunk']}"
         )
 
+        download_started = time.time()
         with requests.get(
             BASE + task["input"],
             stream=True,
@@ -247,6 +312,7 @@ while True:
 
                     if block:
                         file.write(block)
+        download_time = time.time() - download_started
 
 
         # ----------------------------------------------------
@@ -301,11 +367,13 @@ while True:
         ]
 
 
+        processing_started = time.time()
         process = subprocess.run(
             command,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE
         )
+        processing_time = time.time() - processing_started
 
 
         # ----------------------------------------------------
@@ -336,6 +404,7 @@ while True:
             f"Uploading result"
         )
 
+        upload_started = time.time()
         with output_file.open(
             "rb"
         ) as file:
@@ -353,9 +422,15 @@ while True:
                         "video/mp2t"
                     )
                 },
+                data={
+                    "download_time": round(download_time, 4),
+                    "processing_time": round(processing_time, 4),
+                    "upload_time": 0,
+                },
 
                 timeout=300
             ).raise_for_status()
+        upload_time = time.time() - upload_started
 
 
         # ----------------------------------------------------
