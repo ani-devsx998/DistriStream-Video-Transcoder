@@ -1,0 +1,2354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Distributed Video Lab</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+:root {
+    --bg: #070b16;
+    --panel: #0e1526;
+    --border: #263653;
+    --text: #f4f7ff;
+    --muted: #8fa1c4;
+    --purple: #7c5cff;
+    --purple-light: #a99cff;
+    --blue: #4da3ff;
+    --teal: #19c7b8;
+    --green: #38d39f;
+    --red: #ff6b81;
+}
+
+body {
+    margin: 0;
+    background:
+        radial-gradient(
+            circle at 10% 0%,
+            rgba(124, 92, 255, .14),
+            transparent 32%
+        ),
+        radial-gradient(
+            circle at 90% 10%,
+            rgba(25, 199, 184, .09),
+            transparent 28%
+        ),
+        var(--bg);
+
+    color: var(--text);
+    font: 15px/1.5 Inter, Segoe UI, system-ui, sans-serif;
+}
+
+.wrap {
+    max-width: 1220px;
+    margin: auto;
+    padding: 28px 24px 60px;
+}
+
+/* =========================
+   HEADER
+========================= */
+
+.top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.brand {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    font-weight: 800;
+    font-size: 17px;
+}
+
+.logo {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+
+    display: grid;
+    place-items: center;
+
+    background: linear-gradient(
+        135deg,
+        var(--purple),
+        var(--teal)
+    );
+
+    box-shadow:
+        0 8px 28px rgba(124, 92, 255, .28);
+}
+
+.top-status {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+/* =========================
+   CARDS
+========================= */
+
+.card {
+    background:
+        linear-gradient(
+            180deg,
+            rgba(17, 27, 48, .96),
+            rgba(10, 16, 29, .96)
+        );
+
+    border: 1px solid var(--border);
+    border-radius: 20px;
+
+    padding: 24px;
+    margin: 18px 0;
+
+    box-shadow:
+        0 18px 55px rgba(0, 0, 0, .25);
+}
+
+/* =========================
+   HERO
+========================= */
+
+.hero {
+    display: grid;
+    grid-template-columns: 1.25fr .75fr;
+    gap: 28px;
+
+    align-items: center;
+    min-height: 350px;
+}
+
+.eyebrow {
+    color: var(--purple-light);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+}
+
+h1 {
+    font-size: 43px;
+    line-height: 1.05;
+    margin: 8px 0 12px;
+
+    letter-spacing: -1.5px;
+}
+
+h2 {
+    margin: 0 0 8px;
+}
+
+.muted {
+    color: var(--muted);
+}
+
+.subtitle {
+    max-width: 680px;
+    color: var(--muted);
+    font-size: 16px;
+}
+
+/* =========================
+   UPLOAD
+========================= */
+
+.drop {
+    min-height: 180px;
+
+    border: 1px dashed #3d4e75;
+    border-radius: 17px;
+
+    display: grid;
+    place-items: center;
+
+    text-align: center;
+
+    cursor: pointer;
+
+    background: rgba(7, 11, 22, .45);
+
+    transition:
+        .2s ease;
+}
+
+.drop:hover {
+    border-color: var(--purple);
+    background: rgba(124, 92, 255, .06);
+}
+
+.drop input {
+    display: none;
+}
+
+.plus {
+    font-size: 42px;
+    color: var(--purple-light);
+    line-height: 1;
+}
+
+#fn {
+    font-weight: 700;
+    margin-top: 8px;
+}
+
+/* =========================
+   QUALITY BUTTONS
+========================= */
+
+.quality {
+    display: flex;
+    gap: 9px;
+    flex-wrap: wrap;
+    margin-top: 15px;
+}
+
+.q {
+    border: 1px solid #334465;
+    border-radius: 10px;
+
+    padding: 9px 15px;
+
+    cursor: pointer;
+
+    color: #d8e1f5;
+    background: #0a1222;
+
+    transition: .15s;
+}
+
+.q:hover {
+    border-color: var(--purple);
+}
+
+.q.on {
+    border-color: var(--purple);
+
+    background:
+        rgba(124, 92, 255, .16);
+
+    color: white;
+}
+
+/* =========================
+   SELECTED OUTPUT
+========================= */
+
+.selected {
+    border: 1px solid #283957;
+
+    background:
+        rgba(7, 11, 22, .48);
+
+    border-radius: 16px;
+
+    padding: 20px;
+}
+
+.selected-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+
+    color: var(--muted);
+}
+
+#sel {
+    font-size: 26px;
+    margin: 8px 0 12px;
+}
+
+/* =========================
+   BUTTON
+========================= */
+
+button {
+    border: 0;
+    border-radius: 11px;
+
+    padding: 12px 18px;
+
+    color: white;
+
+    font-weight: 800;
+
+    cursor: pointer;
+
+    background:
+        linear-gradient(
+            135deg,
+            var(--purple),
+            #5e7cff
+        );
+
+    box-shadow:
+        0 10px 28px rgba(124, 92, 255, .22);
+
+    transition: .15s;
+}
+
+button:hover {
+    transform: translateY(-1px);
+}
+
+button:disabled {
+    opacity: .7;
+    cursor: not-allowed;
+}
+
+/* =========================
+   JOB STATS
+========================= */
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.stat {
+    background: #091121;
+
+    border: 1px solid #263653;
+
+    border-radius: 14px;
+
+    padding: 16px;
+}
+
+.stat-label {
+    color: var(--muted);
+
+    font-size: 12px;
+
+    text-transform: uppercase;
+
+    letter-spacing: .08em;
+}
+
+.stat b {
+    display: block;
+
+    font-size: 25px;
+
+    margin-top: 4px;
+}
+
+/* =========================
+   PROGRESS
+========================= */
+
+.progress-wrap {
+    margin-top: 18px;
+}
+
+.progress-head {
+    display: flex;
+    justify-content: space-between;
+
+    color: var(--muted);
+
+    font-size: 13px;
+
+    margin-bottom: 8px;
+}
+
+.bar {
+    height: 10px;
+
+    background: #1b2945;
+
+    border-radius: 999px;
+
+    overflow: hidden;
+}
+
+.fill {
+    height: 100%;
+
+    width: 0%;
+
+    background:
+        linear-gradient(
+            90deg,
+            var(--purple),
+            var(--blue),
+            var(--teal)
+        );
+
+    transition: width .35s;
+}
+
+.job-state {
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: 7px;
+
+    margin-top: 15px;
+
+    padding: 7px 11px;
+
+    border-radius: 999px;
+
+    background: #0a1222;
+
+    border: 1px solid #2a3a59;
+
+    color: #b9c7e2;
+}
+
+.dot {
+    width: 7px;
+    height: 7px;
+
+    border-radius: 50%;
+
+    background: var(--teal);
+
+    box-shadow:
+        0 0 12px var(--teal);
+}
+
+/* =========================
+   OUTPUTS
+========================= */
+
+.outputs {
+    display: grid;
+
+    grid-template-columns:
+        repeat(auto-fit, minmax(180px, 1fr));
+
+    gap: 10px;
+
+    margin-top: 15px;
+}
+
+.output {
+    display: block;
+
+    text-decoration: none;
+
+    color: #eaf0ff;
+
+    border: 1px solid #2c3d5d;
+
+    border-radius: 13px;
+
+    padding: 15px;
+
+    background: #091121;
+
+    transition: .15s;
+}
+
+.output:hover {
+    border-color: var(--purple);
+
+    background: #101a30;
+
+    transform: translateY(-1px);
+}
+
+.output small {
+    display: block;
+
+    color: var(--muted);
+
+    margin-top: 4px;
+}
+
+/* =========================
+   WORKER SECTION
+========================= */
+
+.section-head {
+    display: flex;
+
+    justify-content: space-between;
+
+    gap: 15px;
+
+    align-items: end;
+
+    margin-bottom: 18px;
+}
+
+.live {
+    color: var(--green);
+
+    font-size: 12px;
+
+    font-weight: 800;
+}
+
+.workers {
+    display: grid;
+
+    grid-template-columns:
+        repeat(auto-fit, minmax(250px, 1fr));
+
+    gap: 12px;
+}
+
+.worker {
+    position: relative;
+
+    overflow: hidden;
+
+    border: 1px solid #293a5a;
+
+    border-radius: 15px;
+
+    padding: 16px;
+
+    background:
+        linear-gradient(
+            145deg,
+            #0b1426,
+            #09101d
+        );
+}
+
+.worker::before {
+    content: "";
+
+    position: absolute;
+
+    left: 0;
+    top: 0;
+    bottom: 0;
+
+    width: 3px;
+
+    background: var(--green);
+}
+
+.worker.busy::before {
+    background: var(--purple);
+}
+
+.worker-head {
+    display: flex;
+
+    justify-content: space-between;
+
+    gap: 8px;
+
+    align-items: center;
+}
+
+.worker-name {
+    font-weight: 800;
+}
+
+.badge {
+    font-size: 11px;
+
+    font-weight: 800;
+
+    text-transform: uppercase;
+
+    padding: 4px 8px;
+
+    border-radius: 999px;
+
+    background:
+        rgba(56, 211, 159, .1);
+
+    color: var(--green);
+
+    border:
+        1px solid rgba(56, 211, 159, .25);
+}
+
+.busy .badge {
+    color: #bcaeff;
+
+    background:
+        rgba(124, 92, 255, .1);
+
+    border-color:
+        rgba(124, 92, 255, .25);
+}
+
+.worker-meta {
+    display: grid;
+
+    grid-template-columns: 1fr 1fr;
+
+    gap: 8px;
+
+    margin-top: 14px;
+}
+
+.meta {
+    background: #080f1d;
+
+    border: 1px solid #1d2b46;
+
+    border-radius: 9px;
+
+    padding: 8px;
+}
+
+.meta span {
+    display: block;
+
+    color: var(--muted);
+
+    font-size: 10px;
+
+    text-transform: uppercase;
+}
+
+.meta b {
+    font-size: 13px;
+}
+
+.activity {
+    margin-top: 12px;
+
+    color: #aebbd4;
+
+    font-size: 12px;
+
+    white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+}
+
+.empty {
+    padding: 28px;
+
+    text-align: center;
+
+    border: 1px dashed #334565;
+
+    border-radius: 14px;
+
+    color: var(--muted);
+}
+
+.note {
+    margin-top: 14px;
+
+    padding: 12px 14px;
+
+    border-radius: 12px;
+
+    border: 1px solid #263653;
+
+    background: #091121;
+
+    color: #9fb0cf;
+
+    font-size: 12px;
+}
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media (max-width: 850px) {
+    .hero {
+        grid-template-columns: 1fr;
+    }
+
+    .stats {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 560px) {
+    .wrap {
+        padding: 18px 13px;
+    }
+
+    h1 {
+        font-size: 32px;
+    }
+
+    .stats {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* =========================
+   VIDEO PLAYER
+========================= */
+
+.player-quality {
+    border: 1px solid #334465;
+    border-radius: 10px;
+    padding: 9px 15px;
+    cursor: pointer;
+    color: #d8e1f5;
+    background: #0a1222;
+    transition: .15s;
+}
+
+.player-quality:hover {
+    border-color: var(--purple);
+}
+
+.player-quality.active {
+    border-color: var(--purple);
+    background: rgba(124, 92, 255, .16);
+    color: white;
+}
+
+/* ==========================================================
+   WORKER CLUSTER — MODERN UI
+   ========================================================== */
+
+.worker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 18px;
+    margin-top: 20px;
+}
+
+/* Main worker card */
+.worker {
+    position: relative;
+    overflow: hidden;
+
+    padding: 20px;
+
+    border: 1px solid rgba(55, 78, 116, 0.65);
+    border-radius: 18px;
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(17, 28, 50, 0.96),
+            rgba(8, 15, 29, 0.98)
+        );
+
+    transition:
+        transform 0.18s ease,
+        border-color 0.18s ease,
+        box-shadow 0.18s ease;
+
+    box-shadow:
+        0 12px 35px rgba(0, 0, 0, 0.18);
+}
+
+/* Subtle top glow */
+.worker::before {
+    content: "";
+    position: absolute;
+
+    top: 0;
+    left: 0;
+    right: 0;
+
+    height: 2px;
+
+    background: linear-gradient(
+        90deg,
+        #7c5cff,
+        #4da3ff,
+        #19c7b8
+    );
+
+    opacity: 0.65;
+}
+
+/* Hover */
+.worker:hover {
+    transform: translateY(-3px);
+
+    border-color: rgba(124, 92, 255, 0.7);
+
+    box-shadow:
+        0 18px 45px rgba(40, 30, 100, 0.22);
+}
+
+/* BUSY worker gets stronger visual priority */
+.worker.busy {
+    border-color: rgba(25, 199, 184, 0.65);
+
+    box-shadow:
+        0 0 0 1px rgba(25, 199, 184, 0.08),
+        0 18px 50px rgba(25, 199, 184, 0.10);
+}
+
+.worker.busy::before {
+    background: linear-gradient(
+        90deg,
+        #19c7b8,
+        #38d39f
+    );
+
+    opacity: 1;
+}
+
+/* Header */
+.worker-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    margin-bottom: 18px;
+}
+
+.worker-name {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+}
+
+/* Online dot */
+.worker-name::before {
+    content: "";
+
+    width: 8px;
+    height: 8px;
+
+    border-radius: 50%;
+
+    background: #38d39f;
+
+    box-shadow:
+        0 0 0 4px rgba(56, 211, 159, 0.10),
+        0 0 12px rgba(56, 211, 159, 0.55);
+}
+
+/* Status badge */
+.badge {
+    padding: 6px 10px;
+
+    border-radius: 999px;
+
+    font-size: 10px;
+    font-weight: 900;
+
+    letter-spacing: 0.8px;
+
+    border: 1px solid rgba(56, 211, 159, 0.25);
+
+    background: rgba(56, 211, 159, 0.08);
+
+    color: #38d39f;
+}
+
+.worker.busy .badge {
+    color: #19c7b8;
+
+    border-color:
+        rgba(25, 199, 184, 0.3);
+
+    background:
+        rgba(25, 199, 184, 0.09);
+}
+
+/* Hardware metrics */
+.worker-meta {
+    display: grid;
+
+    grid-template-columns: 1fr 1fr;
+
+    gap: 10px;
+
+    margin-bottom: 16px;
+}
+
+.meta {
+    min-height: 82px;
+
+    padding: 14px;
+
+    border: 1px solid rgba(48, 67, 101, 0.65);
+
+    border-radius: 14px;
+
+    background:
+        rgba(6, 13, 26, 0.72);
+}
+
+.meta span {
+    display: block;
+
+    margin-bottom: 5px;
+
+    color: #7284a8;
+
+    font-size: 10px;
+
+    font-weight: 800;
+
+    text-transform: uppercase;
+
+    letter-spacing: 1px;
+}
+
+.meta b {
+    display: block;
+
+    color: #f5f7ff;
+
+    font-size: 16px;
+
+    font-weight: 800;
+
+    line-height: 1.35;
+}
+
+/* Make CPU number look modern */
+.meta:first-child b {
+    font-size: 22px;
+    letter-spacing: -0.5px;
+}
+
+.meta:first-child b::after {
+    content: " CORES";
+
+    margin-left: 4px;
+
+    color: #7587aa;
+
+    font-size: 9px;
+
+    font-weight: 800;
+
+    letter-spacing: 0.8px;
+}
+
+/* Remove old "cores" text if the JS provides it */
+.meta:first-child b {
+    font-size: 0;
+}
+
+.meta:first-child b::before {
+    content: attr(data-cpu);
+    font-size: 22px;
+}
+
+.meta:first-child b::after {
+    content: " CORES";
+
+    font-size: 9px;
+}
+
+/* Activity */
+.activity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    min-height: 34px;
+
+    padding-top: 12px;
+
+    border-top: 1px solid rgba(42, 59, 91, 0.55);
+
+    color: #8496b8;
+
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.worker.busy .activity {
+    color: #c7d8e8;
+}
+
+.worker.busy .activity::before {
+    content: "";
+
+    width: 7px;
+    height: 7px;
+
+    border-radius: 50%;
+
+    background: #19c7b8;
+
+    box-shadow:
+        0 0 10px rgba(25, 199, 184, 0.8);
+
+    animation: workerPulse 1.4s infinite;
+}
+
+@keyframes workerPulse {
+    0%, 100% {
+        opacity: 0.45;
+        transform: scale(0.85);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Empty state */
+.empty {
+    padding: 38px 20px;
+
+    text-align: center;
+
+    border: 1px dashed #334565;
+
+    border-radius: 16px;
+
+    color: var(--muted);
+
+    background: rgba(10, 17, 31, 0.5);
+}
+
+/* Mobile */
+@media (max-width: 700px) {
+    .worker-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .worker-meta {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="wrap">
+
+<!-- =========================
+     HEADER
+========================= -->
+
+<div class="top">
+
+    <div class="brand">
+
+        <div class="logo">
+            ▶
+        </div>
+
+        <div>
+            Distributed Video Lab
+        </div>
+
+    </div>
+
+    <div class="top-status">
+        Coordinator · Distributed Worker Network
+    </div>
+
+</div>
+
+
+<!-- =========================
+     UPLOAD / HERO
+========================= -->
+
+<section class="card hero">
+
+    <div>
+
+        <div class="eyebrow">
+            Distributed media pipeline
+        </div>
+
+        <h1>
+            Parallel video processing.
+        </h1>
+
+        <p class="subtitle">
+            Upload one high-quality video and let independent
+            worker nodes process chunk × quality tasks in parallel.
+        </p>
+
+
+        <!-- VIDEO UPLOAD -->
+
+        <label class="drop">
+
+            <input
+                id="file"
+                type="file"
+                accept="video/*"
+            >
+
+            <div>
+
+                <div class="plus">
+                    ＋
+                </div>
+
+                <div id="fn">
+                    Choose video
+                </div>
+
+                <small class="muted">
+                    FFmpeg-supported video
+                </small>
+
+            </div>
+
+        </label>
+
+
+        <!-- QUALITY BUTTONS -->
+
+        <div class="quality">
+
+            <span
+                class="q on"
+                data-q="1080p">
+                1080p
+            </span>
+
+            <span
+                class="q on"
+                data-q="720p">
+                720p
+            </span>
+
+            <span
+                class="q on"
+                data-q="480p">
+                480p
+            </span>
+
+            <span
+                class="q"
+                data-q="360p">
+                360p
+            </span>
+
+        </div>
+
+    </div>
+
+
+    <!-- SELECTED OUTPUT -->
+
+    <div class="selected">
+
+        <div class="selected-label">
+            Selected output profiles
+        </div>
+
+        <div id="sel">
+            1080p · 720p · 480p
+        </div>
+
+        <p class="muted">
+            Every chunk × quality combination becomes an
+            independent task. Registered workers claim tasks dynamically.
+        </p>
+
+        <button id="go">
+            Start distributed processing
+        </button>
+
+    </div>
+
+</section>
+
+
+<!-- =========================
+     LIVE JOB
+========================= -->
+
+<section
+    class="card"
+    id="job"
+    style="display:none">
+
+    <div class="section-head">
+
+        <div>
+
+            <div class="eyebrow">
+                Live processing
+            </div>
+
+            <h2 id="jt">
+                Processing job
+            </h2>
+
+        </div>
+
+        <div class="live">
+            ● LIVE
+        </div>
+
+    </div>
+
+
+    <!-- STATISTICS -->
+
+    <div class="stats">
+
+        <div class="stat">
+
+            <div class="stat-label">
+                Chunks
+            </div>
+
+            <b id="chunks">
+                -
+            </b>
+
+        </div>
+
+
+        <div class="stat">
+
+            <div class="stat-label">
+                Tasks
+            </div>
+
+            <b id="tasks">
+                -
+            </b>
+
+        </div>
+
+
+        <div class="stat">
+
+            <div class="stat-label">
+                Completed
+            </div>
+
+            <b id="done">
+                -
+            </b>
+
+        </div>
+
+
+        <div class="stat">
+
+            <div class="stat-label">
+                Status
+            </div>
+
+            <b id="st">
+                -
+            </b>
+
+        </div>
+
+    </div>
+
+
+    <!-- PROGRESS -->
+
+    <div class="progress-wrap">
+
+        <div class="progress-head">
+
+            <span>
+                Distributed progress
+            </span>
+
+            <span id="pct">
+                0%
+            </span>
+
+        </div>
+
+        <div class="bar">
+
+            <div
+                class="fill"
+                id="fill">
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="job-state">
+
+        <span class="dot"></span>
+
+        <span id="msg">
+            Waiting for workers…
+        </span>
+
+    </div>
+
+
+    <!-- OUTPUTS -->
+
+    <div id="out"></div>
+    <!-- VIDEO PLAYER -->
+<div id="videoPlayer" style="display:none; margin-top:24px;">
+
+    <div class="section-head">
+        <div>
+            <div class="eyebrow">
+                Video output
+            </div>
+
+            <h2>
+                Watch generated video
+            </h2>
+
+            <div class="muted">
+                Select an output quality to preview the processed video.
+            </div>
+        </div>
+
+        <div class="live" id="playerQuality">
+            1080p
+        </div>
+    </div>
+
+
+    <div
+        style="
+            background:#050914;
+            border:1px solid #263653;
+            border-radius:16px;
+            padding:10px;
+            overflow:hidden;
+        "
+    >
+
+        <video
+            id="video"
+            controls
+            playsinline
+            style="
+                width:100%;
+                max-height:560px;
+                display:block;
+                border-radius:10px;
+                background:#000;
+            "
+        ></video>
+
+    </div>
+
+
+    <div
+        id="qualityControls"
+        style="
+            display:flex;
+            gap:9px;
+            flex-wrap:wrap;
+            margin-top:14px;
+        "
+    >
+    </div>
+
+</div>
+
+</section>
+
+
+<!-- =========================
+     WORKER NODES
+========================= -->
+
+<section class="card">
+
+    <div class="section-head">
+
+        <div>
+
+            <div class="eyebrow">
+                Compute cluster
+            </div>
+
+            <h2>
+                Worker nodes
+            </h2>
+
+            <div class="muted">
+                New workers appear automatically as they register.
+            </div>
+
+        </div>
+
+        <div
+            class="live"
+            id="workerCount">
+            0 nodes online
+        </div>
+
+    </div>
+
+
+    <div
+        class="workers"
+        id="workers">
+
+        <div class="empty">
+            No workers registered yet.
+        </div>
+
+    </div>
+
+
+    <div class="note">
+
+        Start another worker process and it will appear here
+        automatically.
+
+        Multiple cards can show
+        <b>BUSY</b>
+        simultaneously when tasks are being processed in parallel.
+
+    </div>
+
+</section>
+
+</div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+<script>
+
+/* ==========================================================
+   GLOBAL STATE
+========================================================== */
+
+let qs = new Set([
+    "1080p",
+    "720p",
+    "480p"
+]);
+
+let jid = null;
+
+
+/* ==========================================================
+   DOM REFERENCES
+========================================================== */
+
+const file =
+    document.getElementById("file");
+
+const fn =
+    document.getElementById("fn");
+
+const sel =
+    document.getElementById("sel");
+
+const go =
+    document.getElementById("go");
+
+
+/* ==========================================================
+   QUALITY SELECTION
+========================================================== */
+
+document
+.querySelectorAll(".q")
+.forEach(el => {
+
+    el.onclick = () => {
+
+        const q = el.dataset.q;
+
+        if (qs.has(q)) {
+
+            /*
+             * Don't allow all qualities
+             * to be disabled.
+             */
+            if (qs.size === 1) {
+                return;
+            }
+
+            qs.delete(q);
+
+            el.classList.remove("on");
+
+        }
+
+        else {
+
+            qs.add(q);
+
+            el.classList.add("on");
+
+        }
+
+        sel.textContent =
+            [...qs].join(" · ");
+    };
+
+});
+
+
+/* ==========================================================
+   FILE SELECTION
+========================================================== */
+
+file.onchange = () => {
+
+    if (file.files[0]) {
+
+        fn.textContent =
+            file.files[0].name;
+
+    }
+
+};
+
+
+/* ==========================================================
+   START PROCESSING
+========================================================== */
+
+go.onclick = async () => {
+
+    if (!file.files[0]) {
+
+        alert("Choose a video");
+
+        return;
+
+    }
+
+
+    /*
+     * IMPORTANT:
+     * Button changes immediately.
+     */
+
+    go.disabled = true;
+
+    go.textContent =
+        "Uploading + chunking…";
+
+
+    try {
+
+        const form =
+            new FormData();
+
+        form.append(
+            "video",
+            file.files[0]
+        );
+
+        form.append(
+            "profiles",
+            [...qs].join(",")
+        );
+
+
+        const response =
+            await fetch(
+                "/api/upload",
+                {
+                    method: "POST",
+                    body: form
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.detail ||
+                "Upload failed"
+            );
+
+        }
+
+
+        /*
+         * Save Job ID returned by FastAPI.
+         */
+
+        jid =
+            data.job_id;
+
+
+        /*
+         * Show processing panel.
+         */
+
+        document
+        .getElementById("job")
+        .style.display = "block";
+
+
+        document
+        .getElementById("jt")
+        .textContent =
+            "Processing · " +
+            jid.slice(0, 8);
+
+
+        /*
+         * This fixes the confusing
+         * "Uploading + chunking..."
+         * remaining after upload.
+         */
+
+        go.textContent =
+            "Distributed processing started";
+
+
+        poll();
+
+    }
+
+    catch (error) {
+
+        console.error(error);
+
+        go.disabled = false;
+
+        go.textContent =
+            "Start distributed processing";
+
+        alert(error.message);
+
+    }
+
+};
+
+
+/* ==========================================================
+   JOB POLLING
+========================================================== */
+
+async function poll() {
+
+    if (!jid) {
+        return;
+    }
+
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/jobs/" + jid
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "Could not fetch job status"
+            );
+
+        }
+
+
+        const data =
+            await response.json();
+
+
+        const chunks =
+            data.profiles.length
+                ? Math.round(
+                    data.total /
+                    data.profiles.length
+                )
+                : 0;
+
+
+        document
+        .getElementById("chunks")
+        .textContent =
+            chunks;
+
+
+        document
+        .getElementById("tasks")
+        .textContent =
+            data.total;
+
+
+        document
+        .getElementById("done")
+        .textContent =
+            data.done;
+
+
+        document
+        .getElementById("st")
+        .textContent =
+            data.status;
+
+
+        const percentage =
+            data.total
+                ? Math.round(
+                    data.done /
+                    data.total *
+                    100
+                )
+                : 0;
+
+
+        document
+        .getElementById("fill")
+        .style.width =
+            percentage + "%";
+
+
+        document
+        .getElementById("pct")
+        .textContent =
+            percentage + "%";
+
+
+        /*
+         * STATUS: COMPLETED
+         */
+
+        if (
+            data.status === "completed"
+        ) {
+
+            document
+            .getElementById("msg")
+            .textContent =
+                "All distributed tasks completed · output ready";
+
+
+            go.textContent =
+                "✓ Processing complete";
+
+
+            renderOutputs(data);
+
+        }
+
+
+        /*
+         * STATUS: PROCESSING
+         */
+
+        else if (
+            data.status === "processing"
+        ) {
+
+            document
+            .getElementById("msg")
+            .textContent =
+                percentage +
+                "% complete · " +
+                data.done +
+                " / " +
+                data.total +
+                " tasks";
+
+
+            go.textContent =
+                "Workers processing in parallel…";
+
+        }
+
+
+        /*
+         * STATUS: OTHER
+         */
+
+        else {
+
+            document
+            .getElementById("msg")
+            .textContent =
+                percentage +
+                "% complete · " +
+                data.done +
+                " / " +
+                data.total +
+                " tasks";
+
+
+            go.textContent =
+                "Waiting for worker nodes…";
+
+        }
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Job polling error:",
+            error
+        );
+
+    }
+
+
+    /*
+     * Keep checking while the
+     * job is active.
+     */
+
+    setTimeout(
+        poll,
+        1500
+    );
+
+}
+
+
+/* ==========================================================
+   OUTPUT CARDS
+========================================================== */
+
+function renderOutputs(data) {
+
+    const outputContainer =
+        document.getElementById("out");
+
+    /*
+     * Prevent the player/output UI from being
+     * recreated every 1.5 seconds.
+     */
+    if (outputContainer.dataset.rendered === "true") {
+        return;
+    }
+
+    outputContainer.dataset.rendered = "true";
+
+
+    outputContainer.innerHTML = `
+
+        <h3 style="margin-top:22px">
+            Outputs
+        </h3>
+
+        <div class="outputs">
+
+            ${data.profiles.map(
+                profile => `
+
+                <a
+                    class="output"
+                    href="#"
+                    onclick="loadVideo('${profile}'); return false;"
+                >
+
+                    <strong>
+                        ${profile} output
+                    </strong>
+
+                    <small>
+                        Watch generated stream
+                    </small>
+
+                </a>
+
+            `
+            ).join("")}
+
+        </div>
+
+    `;
+
+
+    /*
+     * Show the video player.
+     */
+    document
+        .getElementById("videoPlayer")
+        .style.display = "block";
+
+
+    /*
+     * Create quality buttons.
+     */
+    const controls =
+        document.getElementById("qualityControls");
+
+    controls.innerHTML =
+        data.profiles.map(
+            profile => `
+
+                <button
+                    class="player-quality"
+                    data-quality="${profile}"
+                    onclick="loadVideo('${profile}')"
+                >
+                    ${profile}
+                </button>
+
+            `
+        ).join("");
+
+
+    /*
+     * Load the first available quality.
+     */
+    loadVideo(data.profiles[0]);
+
+}
+
+/* ==========================================================
+   HLS VIDEO PLAYER
+========================================================== */
+
+let hlsPlayer = null;
+
+
+function loadVideo(profile) {
+
+    if (!jid) {
+        return;
+    }
+
+
+    const video =
+        document.getElementById("video");
+
+    const qualityLabel =
+        document.getElementById("playerQuality");
+
+
+    const playlist =
+        `/api/jobs/${jid}/playlist/${profile}`;
+
+
+    /*
+     * Update selected quality in the UI.
+     */
+    qualityLabel.textContent = profile;
+
+
+    document
+        .querySelectorAll(".player-quality")
+        .forEach(button => {
+
+            button.classList.toggle(
+                "active",
+                button.dataset.quality === profile
+            );
+
+        });
+
+
+    /*
+     * Destroy previous HLS instance.
+     */
+    if (hlsPlayer) {
+
+        hlsPlayer.destroy();
+
+        hlsPlayer = null;
+
+    }
+
+
+    /*
+     * Chrome / Edge / Firefox:
+     * use hls.js for .m3u8 playback.
+     */
+    if (Hls.isSupported()) {
+
+        hlsPlayer =
+            new Hls();
+
+        hlsPlayer.loadSource(
+            playlist
+        );
+
+        hlsPlayer.attachMedia(
+            video
+        );
+
+        hlsPlayer.on(
+            Hls.Events.MANIFEST_PARSED,
+            function () {
+
+                video.play().catch(() => {});
+
+            }
+        );
+
+    }
+
+
+    /*
+     * Safari / browsers with native HLS support.
+     */
+    else if (
+        video.canPlayType(
+            "application/vnd.apple.mpegurl"
+        )
+    ) {
+
+        video.src =
+            playlist;
+
+        video.play().catch(() => {});
+
+    }
+
+
+    else {
+
+        alert(
+            "This browser does not support HLS playback."
+        );
+
+    }
+
+}
+
+
+/* ==========================================================
+   ESCAPE HTML
+   Prevents worker names from
+   injecting HTML into dashboard.
+========================================================== */
+
+function esc(value) {
+
+    return String(value)
+
+        .replaceAll(
+            "&",
+            "&amp;"
+        )
+
+        .replaceAll(
+            "<",
+            "&lt;"
+        )
+
+        .replaceAll(
+            ">",
+            "&gt;"
+        )
+
+        .replaceAll(
+            '"',
+            "&quot;"
+        )
+
+        .replaceAll(
+            "'",
+            "&#039;"
+        );
+
+}
+
+
+async function refreshWorkers() {
+
+    try {
+
+        const response = await fetch("/api/workers");
+
+        if (!response.ok) {
+            throw new Error("Worker request failed");
+        }
+
+        const rawWorkers = await response.json();
+
+
+        /*
+         * ------------------------------------------------------
+         * CONSOLIDATE DUPLICATE WORKER NAMES
+         * ------------------------------------------------------
+         *
+         * Your database currently contains old registrations
+         * from previous worker restarts.
+         *
+         * For the UI, keep only the latest registration for
+         * each worker name.
+         *
+         * This is ONLY a frontend presentation change.
+         * No database or backend data is modified.
+         */
+
+        const workerMap = new Map();
+
+        rawWorkers.forEach(worker => {
+
+            const name =
+                worker.name ||
+                worker.id ||
+                "Unknown Worker";
+
+            const existing =
+                workerMap.get(name);
+
+            if (
+                !existing ||
+                (worker.last_seen || 0) >
+                (existing.last_seen || 0)
+            ) {
+                workerMap.set(name, worker);
+            }
+
+        });
+
+
+        const workers = Array.from(
+            workerMap.values()
+        );
+
+
+        /*
+         * ------------------------------------------------------
+         * BUSY WORKERS FIRST
+         * ------------------------------------------------------
+         */
+
+        workers.sort((a, b) => {
+
+            const aBusy =
+                a.status === "busy";
+
+            const bBusy =
+                b.status === "busy";
+
+            if (aBusy && !bBusy) {
+                return -1;
+            }
+
+            if (!aBusy && bBusy) {
+                return 1;
+            }
+
+            return (
+                (b.last_seen || 0) -
+                (a.last_seen || 0)
+            );
+
+        });
+
+
+        /*
+         * ------------------------------------------------------
+         * NODE COUNT
+         * ------------------------------------------------------
+         */
+
+        const workerCount =
+            document.getElementById(
+                "workerCount"
+            );
+
+        workerCount.textContent =
+            workers.length +
+            (
+                workers.length === 1
+                    ? " worker"
+                    : " workers"
+            ) +
+            " online";
+
+
+        /*
+         * ------------------------------------------------------
+         * EMPTY STATE
+         * ------------------------------------------------------
+         */
+
+        if (!workers.length) {
+
+            document.getElementById(
+                "workers"
+            ).innerHTML = `
+                <div class="empty">
+                    No workers registered yet.
+                </div>
+            `;
+
+            return;
+
+        }
+
+
+        /*
+         * ------------------------------------------------------
+         * WORKER CARDS
+         * ------------------------------------------------------
+         */
+
+        document.getElementById(
+            "workers"
+        ).innerHTML = workers.map(
+            (worker, index) => {
+
+                const busy =
+                    worker.status === "busy";
+
+
+                const cpu =
+                    worker.cpu || "-";
+
+
+                const engine =
+                    worker.gpu ||
+                    "FFmpeg";
+
+
+                const activeTask =
+                    worker.active ||
+                    "";
+
+
+                return `
+
+                    <div class="worker ${busy ? "busy" : ""}">
+
+                        <div class="worker-head">
+
+                            <div class="worker-name">
+
+                                ${esc(
+                                    worker.name ||
+                                    "Worker " +
+                                    (index + 1)
+                                )}
+
+                            </div>
+
+
+                            <div class="badge">
+
+                                ${
+                                    busy
+                                        ? "PROCESSING"
+                                        : "READY"
+                                }
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="worker-meta">
+
+                            <div class="meta">
+
+                                <span>
+                                    CPU
+                                </span>
+
+                                <b data-cpu="${esc(cpu)}">
+                                    ${esc(cpu)}
+                                </b>
+
+                            </div>
+
+
+                            <div class="meta">
+
+                                <span>
+                                    ENGINE
+                                </span>
+
+                                <b>
+                                    ${esc(engine)}
+                                </b>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="activity">
+
+                            ${
+                                busy
+
+                                    ? `
+                                        Processing task
+                                        ${esc(
+                                            activeTask
+                                        )}
+                                      `
+
+                                    : `
+                                        Ready for next task
+                                      `
+                            }
+
+                        </div>
+
+                    </div>
+
+                `;
+
+            }
+
+        ).join("");
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Worker refresh error:",
+            error
+        );
+
+    }
+
+}
+
+
+/* ==========================================================
+   INITIAL WORKER LOAD
+========================================================== */
+
+refreshWorkers();
+
+
+/*
+ * Check every 1.5 seconds.
+ *
+ * Therefore:
+ *
+ * worker-1 starts
+ *     ↓
+ * UI shows worker-1
+ *
+ * worker-2 starts
+ *     ↓
+ * UI automatically shows worker-2
+ *
+ * worker-3 starts
+ *     ↓
+ * UI automatically shows worker-3
+ *
+ * No frontend modification required.
+ */
+
+setInterval(
+    refreshWorkers,
+    1500
+);
+
+</script>
+
+</body>
+</html>
