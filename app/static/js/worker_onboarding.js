@@ -21,7 +21,7 @@ export function initWorkerOnboarding() {
         }
         command.textContent =
             `cd <project-folder>\\worker\n` +
-            `.\\.venv\\Scripts\\Activate.ps1\n` +
+            `python -m pip install -r requirements.txt\n` +
             `python worker.py --coordinator ${value} --name Friend-Laptop`;
         copyButton.disabled = false;
     }

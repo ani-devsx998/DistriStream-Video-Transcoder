@@ -61,7 +61,7 @@ for directory in (UP, CH, OUT):
 # ============================================================
 
 app = FastAPI(
-    title="Distributed Video Lab"
+    title="DistriStream"
 )
 
 app.mount(

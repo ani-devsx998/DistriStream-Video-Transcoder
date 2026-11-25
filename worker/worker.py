@@ -4,6 +4,7 @@ import time
 import uuid
 import subprocess
 import tempfile
+import threading
 
 from pathlib import Path
 
@@ -85,12 +86,24 @@ def post(
     data=None,
     files=None
 ):
-    return requests.post(
-        BASE + path,
-        json=data,
-        files=files,
-        timeout=180
-    )
+    last_error = None
+    for attempt in range(3):
+        try:
+            return requests.post(
+                BASE + path,
+                json=data,
+                files=files,
+                timeout=180
+            )
+        except requests.RequestException as error:
+            last_error = error
+            if attempt < 2:
+                time.sleep(1 + attempt)
+    raise RuntimeError(
+        f"Could not reach coordinator at {BASE} ({path}): {last_error}. "
+        "Check that the coordinator is running, the address is reachable, "
+        "and TCP port 8000 is allowed through its firewall."
+    ) from last_error
 
 
 class TaskCancelled(Exception):
@@ -193,8 +206,32 @@ def heartbeat(
         response.raise_for_status()
         return response.json().get("disconnect", False)
 
-    except Exception:
+    except Exception as error:
+        print(f"[{NAME}] heartbeat failed: {error}")
         return False
+
+
+class HeartbeatMonitor:
+    """Keep long-running tasks visible to the coordinator and scheduler."""
+
+    def __init__(self, task_id):
+        self.task_id = task_id
+        self.stop_event = threading.Event()
+        self.thread = threading.Thread(target=self._run, daemon=True)
+
+    def _run(self):
+        while not self.stop_event.wait(10):
+            if heartbeat("busy", self.task_id):
+                print(f"[{NAME}] disconnected by coordinator")
+                self.stop_event.set()
+
+    def start(self):
+        self.thread.start()
+
+    def stop(self):
+        self.stop_event.set()
+        if self.thread.is_alive():
+            self.thread.join(timeout=2)
 
 
 # ============================================================
@@ -259,6 +296,7 @@ RATES = {
 while True:
 
     task = None
+    task_heartbeat = None
 
     try:
 
@@ -304,6 +342,9 @@ while True:
         if heartbeat("busy", task["id"]):
             print(f"[{NAME}] disconnected by coordinator")
             break
+
+        task_heartbeat = HeartbeatMonitor(task["id"])
+        task_heartbeat.start()
 
 
         # ----------------------------------------------------
@@ -463,6 +504,9 @@ while True:
             ).raise_for_status()
         upload_time = time.time() - upload_started
 
+        task_heartbeat.stop()
+        task_heartbeat = None
+
 
         # ----------------------------------------------------
         # CLEAN LOCAL FILES
@@ -496,6 +540,8 @@ while True:
 
     except TaskCancelled:
         print(f"[{NAME}] task cancelled; stopping this worker task")
+        if task_heartbeat:
+            task_heartbeat.stop()
         for local_path in (locals().get("input_file"), locals().get("output_file")):
             if local_path:
                 local_path.unlink(missing_ok=True)
@@ -504,6 +550,9 @@ while True:
             break
 
     except Exception as error:
+
+        if task_heartbeat:
+            task_heartbeat.stop()
 
         print(
             f"[{NAME}] ERROR: "
