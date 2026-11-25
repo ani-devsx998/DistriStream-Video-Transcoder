@@ -52,3 +52,95 @@
 :root[data-theme="coffee"] .hls-ready{color:#477a58}
 .theme-toggle{display:flex;align-items:center;gap:7px;padding:6px 9px;border:1px solid #3d4a55;border-radius:3px;background:#151d26;color:#c3d0d8;font:10px var(--mono);white-space:nowrap}.theme-icon{font-size:14px;line-height:1}
 @media(max-width:620px){.theme-name{display:none}.theme-toggle{padding:5px 7px}}
+.kpi-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+.workflow-note{border-top:1px solid var(--line);margin-top:17px;padding-top:11px;color:var(--muted);font-size:10px}
+.stage{border-radius:3px;transition:background .15s ease}
+.stage:hover{background:color-mix(in srgb,var(--cyan) 7%,transparent)}
+.stage:focus-visible{outline:1px solid var(--cyan);outline-offset:2px}
+.stage.done .stage-status{color:var(--green)}
+.stage.active .stage-status{color:var(--blue)}
+@media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){.pipeline{grid-template-columns:repeat(4,minmax(52px,1fr));row-gap:18px;overflow:visible}.stage:not(:last-child):after{display:none}.stage{min-width:0}.stage-name{font-size:8px}.stage-status{font-size:8px}.workflow-note{line-height:1.5}}
+/* Roomier dashboard type and a larger, easier-to-follow workflow. */
+body{font-size:16px}
+.brand b{font-size:12px}.brand small{font-size:11px}.workspace-label{font-size:11px}.nav-heading{font-size:10px}.nav-link{font-size:13px}.side-line{font-size:12px}.side-line b,.side-foot{font-size:11px}.profile b{font-size:12px}.profile small{font-size:11px}
+.top-actions{font-size:11px}.crumb{font-size:12px}.page-head h1{font-size:28px}.page-head p{font-size:14px}.section-kicker{font-size:11px}
+.kpi{min-height:100px;padding:16px}.kpi-label{font-size:10px}.kpi-value{font-size:24px}.kpi-sub{font-size:12px}
+.card-head{padding:17px 19px 14px}.card-head h2{font-size:14px}.card-head small{font-size:10px}.card-body{padding:18px 19px}
+.job-title{font-size:19px}.job-id{font-size:11px}.spec-label{font-size:10px}.spec-value{font-size:12px}.chip{font-size:10px}
+.pipeline{padding:12px 5px 5px;gap:4px}.stage{min-width:72px;padding:4px 2px 7px}.stage-bullet{width:36px;height:36px;font-size:11px;margin-bottom:12px}.stage:not(:last-child):after{top:22px;left:calc(50% + 23px);right:calc(-50% + 23px)}.stage-name{font-size:11px;letter-spacing:.25px}.stage-status{font-size:10px;margin-top:7px}.workflow-note{font-size:12px;margin-top:20px;padding-top:14px}.dashboard-main{gap:18px}
+.status{font-size:9px;padding:5px 7px}.empty{font-size:12px}.empty strong{font-size:14px}.data-table th{font-size:10px;padding:13px 15px}.data-table td{font-size:12px;padding:13px 15px}.detail-tile span{font-size:10px}.detail-tile b{font-size:16px}.notice{font-size:12px}.formula{font-size:11px}.button{font-size:12px;padding:10px 14px}
+@media(max-width:620px){.page-head h1{font-size:25px}.kpi{padding:13px}.kpi-value{font-size:21px}.card-head{padding:14px}.card-body{padding:15px}.stage{min-width:0}.stage-bullet{width:31px;height:31px;margin-bottom:9px}.stage-name{font-size:9px}.stage-status{font-size:9px}.stage:not(:last-child):after{display:none}}
+/* Coffee light: espresso navigation, crema surfaces and roasted caramel accents. */
+:root[data-theme="coffee"]{--bg:#f0e6d8;--side:#30231c;--panel:#fff9f0;--panel2:#f5eadb;--line:#dfcbb4;--text:#34251b;--muted:#77614e;--dim:#a18870;--cyan:#a35c35;--blue:#607c8e;--green:#4d795a;--amber:#a56c2d;--red:#ad4f43}
+:root[data-theme="coffee"] .sidebar{background:#30231c;border-color:#49372b}
+:root[data-theme="coffee"] .brand{color:#f4e6d5}
+:root[data-theme="coffee"] .brand-mark{background:linear-gradient(145deg,#70442c,#3e2a20);border-color:#986546;color:#f1caa7}
+:root[data-theme="coffee"] .brand small{color:#d0b59b}:root[data-theme="coffee"] .brand i{color:#a88c72}
+:root[data-theme="coffee"] .workspace-label,:root[data-theme="coffee"] .nav-heading,:root[data-theme="coffee"] .eyebrow{color:#a88f78}
+:root[data-theme="coffee"] .nav-link{color:#d2c1ae}:root[data-theme="coffee"] .nav-link:hover{background:#403027;color:#fff3e5}
+:root[data-theme="coffee"] .nav-link.active{color:#f2cda9;background:#493426;border-color:#77563d}
+:root[data-theme="coffee"] .nav-icon,:root[data-theme="coffee"] .nav-link.active .nav-icon{color:#d39a6b}
+:root[data-theme="coffee"] .side-status,:root[data-theme="coffee"] .profile{border-color:#4b392d}:root[data-theme="coffee"] .side-line{color:#d2c0ad}:root[data-theme="coffee"] .side-line b{color:#f0dfcc}
+:root[data-theme="coffee"] .side-foot{border-color:#4b392d;color:#a88f78}:root[data-theme="coffee"] .side-foot span:last-child{color:#ddc9b4}:root[data-theme="coffee"] .profile b{color:#f0e2d2}:root[data-theme="coffee"] .profile small{color:#b69d83}
+:root[data-theme="coffee"] .avatar,:root[data-theme="coffee"] .user-button{background:#493326;border-color:#79583e;color:#efc69f}
+:root[data-theme="coffee"] .topbar{background:#f8f0e5;border-color:#dfcbb4}:root[data-theme="coffee"] .theme-toggle{background:#ead8c2;border-color:#c69a73;color:#5f3927}
+:root[data-theme="coffee"] .card{background:#fff9f0;border-color:#dfcbb4;box-shadow:0 5px 16px #53371d12}
+:root[data-theme="coffee"] .dashboard-main .card:nth-child(2){background:linear-gradient(145deg,#fffaf2 0%,#f8eddf 100%);border-color:#d6b997;box-shadow:0 8px 22px #53371d18}
+:root[data-theme="coffee"] .dashboard-main .card:nth-child(2) .card-head{background:linear-gradient(90deg,#f3e4d2,#fbf3e8);border-color:#e4d1bb}
+:root[data-theme="coffee"] .dashboard-main .card:nth-child(2) .stage-bullet{background:linear-gradient(145deg,#fffaf1,#ead2b8);border-color:#c9a27c;color:#794b30;box-shadow:0 2px 5px #69432318}
+:root[data-theme="coffee"] .dashboard-main .card:nth-child(2) .stage.done .stage-bullet{background:linear-gradient(145deg,#eff4e9,#d9e5d2);border-color:#9bb092;color:#4d795a}
+:root[data-theme="coffee"] .dashboard-main .card:nth-child(2) .stage.active .stage-bullet{background:linear-gradient(145deg,#fff8ed,#e9c7a5);border-color:#b8794e;color:#7c4328;box-shadow:0 0 0 4px #a35c3522,0 2px 7px #69432320}
+:root[data-theme="coffee"] .dashboard-main .card:nth-child(2) .stage:not(:last-child):after{height:2px;background:linear-gradient(90deg,#b88761,#decbb5)}
+:root[data-theme="coffee"] .dashboard-main .card:nth-child(2) .workflow-note{border-color:#e2cfb8;color:#75583f}
+/* Stronger display scale for presentation and classroom viewing. */
+body{font-size:18px}
+.brand b{font-size:14px}.brand small{font-size:12px}.workspace-label{font-size:12px}.nav-heading{font-size:11px}.nav-link{font-size:15px;padding:11px 12px}.side-line{font-size:14px}.side-line b,.side-foot{font-size:12px}.profile b{font-size:14px}.profile small{font-size:12px}
+.top-actions{font-size:12px}.crumb{font-size:13px}.page-head h1{font-size:32px}.page-head p{font-size:16px}.section-kicker{font-size:12px}
+.kpi{min-height:112px;padding:18px}.kpi-label{font-size:12px}.kpi-value{font-size:30px}.kpi-sub{font-size:14px}
+.card-head{padding:19px 22px 16px}.card-head h2{font-size:16px}.card-head small{font-size:12px}.card-body{padding:21px 22px}
+.job-title{font-size:22px}.job-id{font-size:13px}.spec-label{font-size:12px}.spec-value{font-size:14px}.chip{font-size:12px;padding:6px 10px}
+.pipeline{padding:16px 8px 8px;gap:7px}.stage{min-width:82px;padding:6px 3px 10px}.stage-bullet{width:44px;height:44px;font-size:13px;margin-bottom:14px}.stage:not(:last-child):after{top:27px;left:calc(50% + 28px);right:calc(-50% + 28px);height:2px}.stage-name{font-size:13px;letter-spacing:.35px}.stage-status{font-size:12px;margin-top:8px}.workflow-note{font-size:14px;margin-top:23px;padding-top:16px}
+.status{font-size:11px;padding:6px 8px}.empty{font-size:14px}.empty strong{font-size:16px}.data-table th{font-size:12px;padding:15px 17px}.data-table td{font-size:14px;padding:15px 17px}.detail-tile span{font-size:12px}.detail-tile b{font-size:18px}.notice{font-size:14px}.formula{font-size:13px}.button{font-size:14px;padding:11px 16px}.link-button{font-size:12px}
+@media(max-width:620px){.page-head h1{font-size:28px}.page-head p{font-size:15px}.kpi{padding:15px}.kpi-value{font-size:25px}.card-head{padding:16px}.card-head h2{font-size:15px}.card-body{padding:17px}.stage{min-width:0}.stage-bullet{width:36px;height:36px;margin-bottom:11px}.stage-name{font-size:10px}.stage-status{font-size:10px}.stage:not(:last-child):after{display:none}.workflow-note{font-size:13px}}
+/* Keep the presentation type scale consistent on every module and in either theme. */
+:root[data-theme] .worker-name{font-size:15px}:root[data-theme] .worker-caption{font-size:12px}:root[data-theme] .load-text{font-size:12px}
+:root[data-theme] .task-row{font-size:13px}:root[data-theme] .task-id,:root[data-theme] .task-worker{font-size:12px}
+:root[data-theme] .legend{font-size:12px}:root[data-theme] .bar-labels span{font-size:10px}
+:root[data-theme] .event b{font-size:13px}:root[data-theme] .event p{font-size:13px}:root[data-theme] .event time{font-size:11px}
+:root[data-theme] .filter-row select,:root[data-theme] .field select,:root[data-theme] .field input{font-size:13px}:root[data-theme] .field label{font-size:12px}
+:root[data-theme] .drop-zone strong{font-size:16px}:root[data-theme] .drop-zone p{font-size:13px}
+:root[data-theme] .profile-option,:root[data-theme] .quality-button{font-size:12px}:root[data-theme] .mode-option b{font-size:13px}:root[data-theme] .mode-option p{font-size:13px}
+:root[data-theme] .quality-row span,:root[data-theme] .hls-ready{font-size:12px}
+:root[data-theme] .decision-top{font-size:12px}:root[data-theme] .candidate{font-size:11px}
+:root[data-theme] .compare-table th{font-size:11px}:root[data-theme] .compare-table td{font-size:13px}
+:root[data-theme] .worker-stats span{font-size:11px}:root[data-theme] .worker-stats b{font-size:13px}
+:root[data-theme] .spec-label{font-size:12px}:root[data-theme] .spec-value{font-size:14px}
+:root[data-theme] .status{font-size:11px}:root[data-theme] .formula{font-size:13px}:root[data-theme] .notice{font-size:14px}
+.new-job-layout{grid-template-columns:minmax(0,1fr);width:100%;max-width:none;justify-content:stretch}
+.new-job-layout .form-panel{width:100%;min-height:calc(100vh - 220px);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 30px;align-content:start;padding:30px 34px}
+.new-job-layout .form-panel>.section-kicker,.new-job-layout .drop-zone,.new-job-layout .detail-grid,.new-job-layout .head-actions,.new-job-layout>.form-panel>p{grid-column:1/-1}
+.new-job-layout .drop-zone{min-height:190px;display:flex;flex-direction:column;justify-content:center;align-items:center;margin:16px 0 22px}
+.new-job-layout .field{align-self:start;margin:14px 0 20px}
+.new-job-layout .field label{margin-bottom:3px}
+.new-job-layout .mode-option{min-height:118px;padding:19px}
+.new-job-layout .mode-option p{line-height:1.65}
+.new-job-layout .head-actions{margin-top:10px}
+.new-job-layout>.form-panel>p{margin-top:13px}
+@media(max-width:900px){.new-job-layout .form-panel{min-height:0;grid-template-columns:1fr;padding:22px}.new-job-layout .form-panel>.section-kicker,.new-job-layout .drop-zone,.new-job-layout .detail-grid,.new-job-layout .head-actions,.new-job-layout>.form-panel>p{grid-column:1}.new-job-layout .drop-zone{min-height:150px}.new-job-layout .mode-option{min-height:0}}
+.quality-button:disabled{opacity:.42;cursor:not-allowed}
+.playlist-path{margin-top:16px;color:var(--muted);font:12px var(--mono);overflow-wrap:anywhere}
+.playlist-path span{color:var(--text)}
+.hls-wait{padding:20px}
+.resolution-hint{color:var(--muted);font-size:13px;line-height:1.5;margin:10px 0 0}
+.profile-option:disabled{opacity:.4;cursor:not-allowed;text-decoration:line-through}
+.button.danger{background:#572929;border-color:#9d4b4b;color:#ffd0c9}.button.danger:hover{background:#743131}.status.cancelled{color:var(--red);border-color:var(--red);background:color-mix(in srgb,var(--red) 10%,var(--panel))}
+.worker-setup{grid-column:1/-1;border:1px solid var(--line);background:var(--panel2);padding:20px 22px;margin-bottom:12px}
+.setup-fields{display:grid;grid-template-columns:minmax(180px,.65fr) minmax(260px,1.3fr) auto;gap:16px;align-items:end;margin-top:12px}
+.setup-fields .field{margin:0}.setup-fields input{width:100%;min-height:43px}.worker-ready-line{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);margin:16px 0 10px}
+.instruction-panel{border:1px solid var(--line);background:var(--bg);margin-top:13px}.instruction-head{padding:11px 13px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);font:12px var(--mono)}.instruction-panel pre{margin:0;padding:16px;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--text);font:13px/1.65 var(--mono)}
+.new-job-layout .worker-setup,.new-job-layout .video-section-title{grid-column:1/-1}.new-job-layout .mode-select{grid-template-columns:repeat(3,minmax(0,1fr))}.new-job-layout .mode-option{cursor:pointer}.manual-workers{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:13px}.manual-workers>label:first-child{width:100%;font:11px var(--mono);color:var(--muted)}.check-worker{display:flex;align-items:center;gap:7px;border:1px solid var(--line);padding:8px 11px;background:var(--bg);font:12px var(--mono)}.check-worker span{color:var(--muted);font-size:10px}.check-worker input{accent-color:var(--cyan)}
+.player-actions{display:flex;gap:10px;align-items:center;padding:12px 0}.player-actions button{min-width:110px}.playback-status{font-size:13px;color:var(--muted)}.video-box:fullscreen{width:100vw;height:100vh;max-height:none;aspect-ratio:auto;background:#000}.video-box:fullscreen video{max-height:none;object-fit:contain}
+@media(max-width:900px){.setup-fields{grid-template-columns:1fr}.new-job-layout .mode-select{grid-template-columns:1fr}.new-job-layout .worker-setup{padding:16px}}
+:root[data-theme="coffee"] .worker-setup{background:linear-gradient(135deg,#f4e7d6,#fff9f0);border-color:#d8b996}:root[data-theme="coffee"] .instruction-panel{background:#f5ecdf;border-color:#dcc7ae}:root[data-theme="coffee"] .instruction-head{border-color:#dcc7ae;color:#5b4030}:root[data-theme="coffee"] .instruction-panel pre{color:#4d392b}
+:root[data-theme="coffee"] .button.danger{background:#8f4036;border-color:#9c5146;color:#fff4ec}:root[data-theme="coffee"] .button.danger:hover{background:#a44b40}:root[data-theme="coffee"] .status.cancelled{background:#f9e9e5;border-color:#d5988e;color:#98453b}

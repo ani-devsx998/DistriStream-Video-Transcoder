@@ -1,5 +1,6 @@
 import time
 import os
+import json
 
 
 SCHEDULER_MODE = "intelligent"
@@ -45,6 +46,18 @@ def choose_worker(connection, task):
     workers = get_workers(connection)
     eligible = []
 
+    job = connection.execute(
+        "SELECT scheduler_mode, manual_workers FROM jobs WHERE id=?",
+        (task["job_id"],),
+    ).fetchone()
+    mode = (job["scheduler_mode"] if job else None) or os.getenv("SCHEDULER_MODE", SCHEDULER_MODE)
+    if mode == "manual":
+        selected_workers = set(json.loads((job["manual_workers"] if job else None) or "[]"))
+        workers = [
+            worker for worker in workers
+            if worker["id"] in selected_workers or worker["name"] in selected_workers
+        ]
+
     if not workers:
         return None, []
 
@@ -63,8 +76,7 @@ def choose_worker(connection, task):
         if active >= QUEUE_CAPACITY:
             continue
 
-        mode = os.getenv("SCHEDULER_MODE", SCHEDULER_MODE)
-        if mode == "baseline":
+        if mode in ("baseline", "manual"):
             score = 1.0 / (1 + active)
         else:
             score = (

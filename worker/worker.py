@@ -93,6 +93,50 @@ def post(
     )
 
 
+class TaskCancelled(Exception):
+    pass
+
+
+def task_is_cancelled(task_id):
+    try:
+        response = requests.get(
+            BASE + f"/api/tasks/{task_id}/status",
+            timeout=3,
+        )
+        response.raise_for_status()
+        return response.json().get("status") == "cancelled"
+    except Exception:
+        return False
+
+
+def run_ffmpeg(command, task_id):
+    if task_is_cancelled(task_id):
+        raise TaskCancelled("Job was cancelled")
+    started = time.time()
+    with tempfile.TemporaryFile() as error_log:
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.DEVNULL,
+            stderr=error_log,
+        )
+        while process.poll() is None:
+            if task_is_cancelled(task_id):
+                process.terminate()
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                raise TaskCancelled("Job was cancelled")
+            time.sleep(0.5)
+
+        error_log.seek(0)
+        error = error_log.read().decode(errors="ignore")[-1200:]
+    if process.returncode != 0:
+        raise RuntimeError("FFmpeg failed:\n" + error)
+    return time.time() - started
+
+
 # ============================================================
 # GPU DETECTION
 # ============================================================
@@ -310,6 +354,9 @@ while True:
                     1024 * 1024
                 ):
 
+                    if task_is_cancelled(task["id"]):
+                        raise TaskCancelled("Job was cancelled")
+
                     if block:
                         file.write(block)
         download_time = time.time() - download_started
@@ -367,32 +414,7 @@ while True:
         ]
 
 
-        processing_started = time.time()
-        process = subprocess.run(
-            command,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE
-        )
-        processing_time = time.time() - processing_started
-
-
-        # ----------------------------------------------------
-        # FFMPEG FAILURE
-        # ----------------------------------------------------
-
-        if process.returncode != 0:
-
-            error = (
-                process.stderr
-                .decode(
-                    errors="ignore"
-                )[-1200:]
-            )
-
-            raise RuntimeError(
-                "FFmpeg failed:\n"
-                + error
-            )
+        processing_time = run_ffmpeg(command, task["id"])
 
 
         # ----------------------------------------------------
@@ -403,6 +425,9 @@ while True:
             f"[{NAME}] "
             f"Uploading result"
         )
+
+        if task_is_cancelled(task["id"]):
+            raise TaskCancelled("Job was cancelled")
 
         upload_started = time.time()
         with output_file.open(
@@ -460,6 +485,13 @@ while True:
 
         heartbeat("idle")
 
+
+    except TaskCancelled:
+        print(f"[{NAME}] task cancelled; stopping this worker task")
+        for local_path in (locals().get("input_file"), locals().get("output_file")):
+            if local_path:
+                local_path.unlink(missing_ok=True)
+        heartbeat("idle")
 
     except Exception as error:
 

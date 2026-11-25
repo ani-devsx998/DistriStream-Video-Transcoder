@@ -151,6 +151,7 @@ def init():
             ("started_at", "REAL"),
             ("completed_at", "REAL"),
             ("scheduler_mode", "TEXT"),
+            ("manual_workers", "TEXT"),
         ],
         "tasks": [
             ("complexity", "REAL"),
@@ -497,6 +498,43 @@ def job(jid: str):
     return result
 
 
+@app.post("/api/jobs/{jid}/cancel")
+def cancel_job(jid: str):
+    connection = db()
+    job_row = connection.execute(
+        "SELECT status FROM jobs WHERE id=?",
+        (jid,),
+    ).fetchone()
+    if not job_row:
+        connection.close()
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job_row["status"] == "completed":
+        connection.close()
+        raise HTTPException(status_code=409, detail="Completed jobs cannot be cancelled")
+    if job_row["status"] == "cancelled":
+        connection.close()
+        return {"ok": True, "status": "cancelled"}
+
+    now = time.time()
+    connection.execute(
+        "UPDATE tasks SET status='cancelled', error='Cancelled by user' "
+        "WHERE job_id=? AND status!='completed'",
+        (jid,),
+    )
+    connection.execute(
+        "UPDATE workers SET status='idle', active=NULL, last_seen=? "
+        "WHERE id IN (SELECT worker FROM tasks WHERE job_id=? AND status='cancelled' AND worker IS NOT NULL)",
+        (now, jid),
+    )
+    connection.execute(
+        "UPDATE jobs SET status='cancelled', completed_at=? WHERE id=?",
+        (now, jid),
+    )
+    connection.commit()
+    connection.close()
+    return {"ok": True, "status": "cancelled"}
+
+
 @app.get("/api/jobs/{jid}/analysis")
 def job_analysis(jid: str):
     connection = db()
@@ -614,6 +652,28 @@ def duration(video_path: Path):
         return 0
 
 
+def video_dimensions(video_path: Path):
+    """Return source video width and height from ffprobe metadata."""
+    try:
+        result = subprocess.check_output(
+            [
+                "ffprobe",
+                "-v", "error",
+                "-select_streams", "v:0",
+                "-show_entries", "stream=width,height",
+                "-of", "json",
+                str(video_path),
+            ],
+            stderr=subprocess.STDOUT,
+        )
+        streams = json.loads(result.decode()).get("streams", [])
+        if not streams:
+            return None, None
+        return int(streams[0]["width"]), int(streams[0]["height"])
+    except (Exception, KeyError, ValueError, TypeError):
+        return None, None
+
+
 # ============================================================
 # UPLOAD + CHUNKING
 # ============================================================
@@ -624,8 +684,17 @@ async def upload(
     profiles: str = Form(
         "1080p,720p,480p"
     ),
+    scheduler_mode: str = Form("intelligent"),
+    manual_workers: str = Form(""),
 ):
     upload_started = time.time()
+
+    scheduler_mode = scheduler_mode.lower().strip()
+    if scheduler_mode not in {"baseline", "intelligent", "manual"}:
+        raise HTTPException(status_code=400, detail="Mode must be baseline, intelligent, or manual")
+    manual_worker_names = [name.strip() for name in manual_workers.split(",") if name.strip()]
+    if scheduler_mode == "manual" and not manual_worker_names:
+        raise HTTPException(status_code=400, detail="Choose at least one worker for manual assignment")
 
     allowed = {
         "1080p",
@@ -672,6 +741,43 @@ async def upload(
                 break
 
             file.write(chunk)
+
+    _, source_height = video_dimensions(source)
+    if not source_height:
+        source.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=400,
+            detail="Could not read the source video resolution. No job was created.",
+        )
+
+    rendition_heights = {
+        "1080p": 1080,
+        "720p": 720,
+        "480p": 480,
+        "360p": 360,
+    }
+    unsupported = [
+        profile for profile in selected_profiles
+        if rendition_heights[profile] > source_height
+    ]
+    if unsupported:
+        source_label = max(
+            (name for name, height in rendition_heights.items() if height <= source_height),
+            key=lambda name: rendition_heights[name],
+            default="none",
+        )
+        available = ", ".join(
+            name for name, height in rendition_heights.items()
+            if height <= source_height
+        ) or "none"
+        source.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"This source supports up to {source_label}. "
+                f"Higher renditions would upscale the video. Choose: {available}."
+            ),
+        )
 
     upload_time = time.time() - upload_started
 
@@ -779,9 +885,9 @@ async def upload(
         INSERT INTO jobs(
             id, filename, source, duration, status, profiles,
             total, done, created, upload_time, chunking_time,
-            analysis_time, started_at, scheduler_mode
+            analysis_time, started_at, scheduler_mode, manual_workers
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             job_id,
@@ -799,7 +905,8 @@ async def upload(
             round(chunking_time, 4),
             round(analysis_time, 4),
             time.time(),
-            os.getenv("SCHEDULER_MODE", "intelligent"),
+            scheduler_mode,
+            json.dumps(manual_worker_names),
         ),
     )
 
@@ -940,7 +1047,7 @@ async def claim(
 
     now = time.time()
     job_row = connection.execute(
-        "SELECT started_at FROM jobs WHERE id=?",
+        "SELECT started_at, scheduler_mode FROM jobs WHERE id=?",
         (task["job_id"],),
     ).fetchone()
     queue_time = max(
@@ -1009,7 +1116,7 @@ async def claim(
             task["profile"],
             task["complexity"],
             task["priority"],
-            os.getenv("SCHEDULER_MODE", "intelligent"),
+            job_row["scheduler_mode"] if job_row else os.getenv("SCHEDULER_MODE", "intelligent"),
             selected["id"],
             selected["score"],
             json.dumps(candidates),
@@ -1040,6 +1147,18 @@ async def claim(
 # ============================================================
 # TASK INPUT
 # ============================================================
+
+@app.get("/api/tasks/{tid}/status")
+def task_status(tid: str):
+    connection = db()
+    task = connection.execute(
+        "SELECT status FROM tasks WHERE id=?",
+        (tid,),
+    ).fetchone()
+    connection.close()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"status": task["status"]}
 
 @app.get("/api/tasks/{tid}/input")
 def task_input(tid: str):
@@ -1112,6 +1231,14 @@ async def complete(
             detail="Task not found"
         )
 
+    job_state = connection.execute(
+        "SELECT status FROM jobs WHERE id=?",
+        (task["job_id"],),
+    ).fetchone()
+    if task["status"] == "cancelled" or (job_state and job_state["status"] == "cancelled"):
+        connection.close()
+        raise HTTPException(status_code=409, detail="Job was cancelled")
+
     output_directory = (
         OUT
         / task["job_id"]
@@ -1142,7 +1269,7 @@ async def complete(
             file.write(data)
 
     # Mark task complete
-    connection.execute(
+    update_result = connection.execute(
         """
         UPDATE tasks
         SET
@@ -1153,6 +1280,8 @@ async def complete(
             upload_time=?,
             completed_at=?
         WHERE id=?
+          AND status!='cancelled'
+          AND EXISTS (SELECT 1 FROM jobs WHERE id=? AND status!='cancelled')
         """,
         (
             str(output_path),
@@ -1161,8 +1290,13 @@ async def complete(
             round(upload_time, 4),
             time.time(),
             tid,
+            task["job_id"],
         ),
     )
+    if update_result.rowcount == 0:
+        output_path.unlink(missing_ok=True)
+        connection.close()
+        raise HTTPException(status_code=409, detail="Job was cancelled")
 
     # Make worker available again
     if task["worker"]:
@@ -1225,8 +1359,8 @@ async def complete(
 
     if (
         job_row
-        and job_row["done"]
-        == job_row["total"]
+        and job_row["status"] != "cancelled"
+        and job_row["done"] == job_row["total"]
     ):
 
         connection.execute(
@@ -1234,7 +1368,7 @@ async def complete(
             UPDATE jobs
             SET status='completed',
                 completed_at=?
-            WHERE id=?
+            WHERE id=? AND status!='cancelled'
             """,
             (time.time(), task["job_id"]),
         )
@@ -1279,6 +1413,10 @@ async def fail(
     ).fetchone()
 
     if task:
+
+        if task["status"] == "cancelled":
+            connection.close()
+            return {"ok": True, "status": "cancelled"}
 
         connection.execute(
             """
@@ -1348,6 +1486,7 @@ async def make_hls(jid: str):
 
     if (
         not job_row
+        or job_row["status"] == "cancelled"
         or job_row["done"]
         < job_row["total"]
     ):

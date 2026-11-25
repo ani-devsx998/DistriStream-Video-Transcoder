@@ -14,4 +14,5 @@ export const api = {
   metrics: id => json(`/api/jobs/${encodeURIComponent(id)}/metrics`),
   mode: mode => json('/api/scheduler/mode', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode})}),
   upload: form => json('/api/upload', {method:'POST',body:form}),
+  cancelJob: id => json(`/api/jobs/${encodeURIComponent(id)}/cancel`, {method:'POST'}),
 };
