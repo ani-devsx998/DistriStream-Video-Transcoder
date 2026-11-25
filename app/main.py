@@ -8,9 +8,9 @@ import uuid
 from pathlib import Path
 import os
 
-from content_analysis import analyze_chunk, plan_bitrate
-import scheduler as scheduler_module
-from scheduler import (
+from app.content_analysis import analyze_chunk, plan_bitrate
+import app.scheduler as scheduler_module
+from app.scheduler import (
     QUEUE_CAPACITY,
     SCHEDULER_MODE,
     choose_worker,
