@@ -41,6 +41,12 @@ To check connectivity from a worker laptop, run `Test-NetConnection 192.168.0.10
 
 The left navigation includes **Task Distribution**, which displays live completed, queued, assigned, and failed task totals in a doughnut chart. The page shows the distribution chart without a task routing table.
 
+## Deploy to Vercel
+
+Set Vercel's **Root Directory** to the repository root. The root `main.py` exports the FastAPI application, and the root `requirements.txt` installs its dependencies. Vercel should route the deployed site to the FastAPI app at `/`.
+
+The current prototype stores job data and uploaded videos locally and invokes FFmpeg. Vercel Functions use temporary storage and have request size and execution limits, so a successful deployment does not make the full distributed transcoding workflow production-ready. Use durable external storage and a persistent database/worker service for real video jobs.
+
 ## Core architecture
 Browser -> FastAPI Coordinator -> source storage -> FFmpeg chunker -> task queue/table -> Worker Nodes -> FFmpeg -> output storage -> HLS playlists.
 

@@ -40,7 +40,11 @@ from fastapi.staticfiles import StaticFiles
 
 BASE = Path(__file__).resolve().parent.parent
 
-ST = BASE / "storage"
+ST = (
+    Path("/tmp/distristream-storage")
+    if os.getenv("VERCEL")
+    else BASE / "storage"
+)
 
 UP = ST / "uploads"
 CH = ST / "chunks"
