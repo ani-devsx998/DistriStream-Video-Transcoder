@@ -103,8 +103,11 @@ def task_is_cancelled(task_id):
             BASE + f"/api/tasks/{task_id}/status",
             timeout=3,
         )
+        if response.status_code == 404:
+            # Stopped jobs delete their task rows; a missing task is terminal too.
+            return True
         response.raise_for_status()
-        return response.json().get("status") == "cancelled"
+        return response.json().get("status") in ("cancelled", "failed")
     except Exception:
         return False
 
@@ -174,7 +177,7 @@ def heartbeat(
 
     try:
 
-        post(
+        response = post(
             f"/api/workers/{WID}/heartbeat",
             {
                 "status": status,
@@ -187,9 +190,11 @@ def heartbeat(
                 "gpu": detect_gpu(),
             }
         )
+        response.raise_for_status()
+        return response.json().get("disconnect", False)
 
     except Exception:
-        pass
+        return False
 
 
 # ============================================================
@@ -275,7 +280,9 @@ while True:
         # No task available
         if not task:
 
-            heartbeat("idle")
+            if heartbeat("idle"):
+                print(f"[{NAME}] disconnected by coordinator")
+                break
 
             time.sleep(1)
 
@@ -294,10 +301,9 @@ while True:
         # MARK WORKER BUSY
         # ----------------------------------------------------
 
-        heartbeat(
-            "busy",
-            task["id"]
-        )
+        if heartbeat("busy", task["id"]):
+            print(f"[{NAME}] disconnected by coordinator")
+            break
 
 
         # ----------------------------------------------------
@@ -483,7 +489,9 @@ while True:
         # READY FOR NEXT TASK
         # ----------------------------------------------------
 
-        heartbeat("idle")
+        if heartbeat("idle"):
+            print(f"[{NAME}] disconnected by coordinator")
+            break
 
 
     except TaskCancelled:
@@ -491,7 +499,9 @@ while True:
         for local_path in (locals().get("input_file"), locals().get("output_file")):
             if local_path:
                 local_path.unlink(missing_ok=True)
-        heartbeat("idle")
+        if heartbeat("idle"):
+            print(f"[{NAME}] disconnected by coordinator")
+            break
 
     except Exception as error:
 
@@ -524,6 +534,8 @@ while True:
                     f"{fail_error}"
                 )
 
-        heartbeat("idle")
+        if heartbeat("idle"):
+            print(f"[{NAME}] disconnected by coordinator")
+            break
 
         time.sleep(2)

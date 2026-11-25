@@ -4,13 +4,13 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f3ede3"><title>Distributed Video Lab</title>
 <script>document.documentElement.dataset.theme=localStorage.getItem('dvl-theme')||'coffee';</script>
-<link rel="stylesheet" href="/static/css/app.css?v=cancel-worker-setup-2">
+<link rel="stylesheet" href="/static/css/app.css?v=worker-scheduler-charts-20261125-1">
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </head>
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <a class="brand" href="#dashboard"><span class="brand-mark">DV</span><span><b>DISTRIBUTED</b><small>VIDEO LAB <i>CONTROL PLANE</i></small></span></a>
+    <a class="brand" href="#dashboard"><span class="brand-mark">DV</span><span><b>DISTRIBUTED</b><small>VIDEO LAB</small></span></a>
     <div class="workspace-label">WORKSPACE <span>⌄</span></div>
     <nav id="navigation"></nav>
     <div class="side-status"><div class="eyebrow">CLUSTER STATUS</div><div class="side-line"><span class="dot green"></span> Coordinator <b id="coordinatorStatus">ONLINE</b></div><div class="side-line"><span class="dot green"></span> Workers <b id="sideWorkers">—</b></div><div class="side-foot"><span class="pulse"></span> API connection <span id="apiStatus">connecting</span></div></div>
@@ -19,5 +19,5 @@
   <main class="main"><header class="topbar"><div class="crumb"><span>WORKSPACE</span><b>/</b><strong id="crumbTitle">Dashboard</strong></div><div class="top-actions"><button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to dark mode"><span class="theme-icon">☼</span><span class="theme-name">Coffee light</span></button><span class="live-label"><i class="pulse"></i> LIVE</span><span id="lastUpdated">—</span><button class="icon-button" id="refreshButton" title="Refresh">↻</button><button class="user-button">DV</button></div></header><div id="view" class="content"></div></main>
 </div>
 <div id="drawerRoot"></div>
-<script type="module" src="/static/js/app.js?v=cancel-worker-setup-3"></script>
+<script type="module" src="/static/js/app.js?v=worker-scheduler-charts-20261125-1"></script>
 </body></html>

@@ -8,7 +8,8 @@ const json = async (url, options) => {
 export const api = {
   workers: () => json('/api/workers'),
   scheduler: () => json('/api/scheduler/status'),
-  decisions: () => json('/api/scheduler/decisions?limit=100'),
+  decisions: () => json('/api/scheduler/decisions?limit=5'),
+  activeJob: () => json('/api/jobs/active'),
   job: id => json(`/api/jobs/${encodeURIComponent(id)}`),
   analysis: id => json(`/api/jobs/${encodeURIComponent(id)}/analysis`),
   metrics: id => json(`/api/jobs/${encodeURIComponent(id)}/metrics`),

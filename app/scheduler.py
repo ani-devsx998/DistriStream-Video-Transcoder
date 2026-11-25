@@ -101,5 +101,12 @@ def choose_worker(connection, task):
     if not eligible:
         return None, []
 
-    chosen = max(eligible, key=lambda row: row["score"])
+    # Spread work across currently idle capacity before filling one worker's queue.
+    chosen = min(
+        eligible,
+        key=lambda row: (
+            row["active"] / max(row["capacity"], 0.01),
+            -row["score"],
+        ),
+    )
     return chosen, eligible

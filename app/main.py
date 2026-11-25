@@ -175,6 +175,7 @@ def init():
             ("tasks_completed", "INTEGER DEFAULT 0"),
             ("tasks_failed", "INTEGER DEFAULT 0"),
             ("tasks_recovered", "INTEGER DEFAULT 0"),
+            ("disconnect_requested", "INTEGER DEFAULT 0"),
         ],
     }
 
@@ -281,6 +282,7 @@ async def register(
             name=excluded.name,
             host=excluded.host,
             status='idle',
+            disconnect_requested=0,
             last_seen=excluded.last_seen,
             cpu=excluded.cpu,
             gpu=excluded.gpu,
@@ -330,49 +332,44 @@ async def heartbeat(
     wid: str,
     request: Request
 ):
-
     data = await request.json()
-
     connection = db()
+    worker = connection.execute(
+        "SELECT disconnect_requested FROM workers WHERE id=?",
+        (wid,),
+    ).fetchone()
+
+    if not worker:
+        connection.close()
+        return {"ok": False, "disconnect": True}
+
+    if worker["disconnect_requested"]:
+        connection.execute(
+            "UPDATE workers SET status='offline', active=NULL, last_seen=? WHERE id=?",
+            (time.time(), wid),
+        )
+        connection.commit()
+        connection.close()
+        return {"ok": True, "disconnect": True}
 
     connection.execute(
         """
         UPDATE workers
-        SET
-            status=?,
-            last_seen=?,
-            active=?,
-            cpu_usage=?,
-            gpu_usage=?,
-            ram=?,
-            queue_depth=?,
-            network_cost=?,
-            gpu=COALESCE(?, gpu)
+        SET status=?, last_seen=?, active=?, cpu_usage=?, gpu_usage=?, ram=?,
+            queue_depth=?, network_cost=?, gpu=COALESCE(?, gpu)
         WHERE id=?
         """,
         (
-            data.get(
-                "status",
-                "idle"
-            ),
-            time.time(),
-            data.get("active"),
-            data.get("cpu_usage", 0),
-            data.get("gpu_usage", 0),
-            data.get("ram"),
-            data.get("queue_depth", 0),
-            data.get("network_cost", 0),
-            data.get("gpu"),
-            wid,
+            data.get("status", "idle"), time.time(), data.get("active"),
+            data.get("cpu_usage", 0), data.get("gpu_usage", 0), data.get("ram"),
+            data.get("queue_depth", 0), data.get("network_cost", 0),
+            data.get("gpu"), wid,
         ),
     )
-
     connection.commit()
     connection.close()
+    return {"ok": True, "disconnect": False}
 
-    return {
-        "ok": True
-    }
 
 
 @app.get("/api/scheduler/status")
@@ -412,7 +409,7 @@ async def scheduler_mode(request: Request):
 
 
 @app.get("/api/scheduler/decisions")
-def scheduler_decisions(limit: int = 100):
+def scheduler_decisions(limit: int = 5):
     connection = db()
     rows = connection.execute(
         """
@@ -435,7 +432,18 @@ def scheduler_decisions(limit: int = 100):
 # VIDEO JOB
 # ============================================================
 
+@app.get("/api/jobs/active")
+def active_job():
+    connection = db()
+    row = connection.execute(
+        "SELECT id, status FROM jobs WHERE status IN ('queued', 'processing') ORDER BY created DESC LIMIT 1"
+    ).fetchone()
+    connection.close()
+    return dict(row) if row else None
+
+
 @app.get("/api/jobs/{jid}")
+
 def job(jid: str):
 
     connection = db()
@@ -498,6 +506,23 @@ def job(jid: str):
     return result
 
 
+def purge_stopped_job_tasks(connection, jid, now):
+    connection.execute(
+        "UPDATE workers SET status='offline', disconnect_requested=1, active=NULL, last_seen=? "
+        "WHERE id IN (SELECT worker FROM tasks WHERE job_id=? AND worker IS NOT NULL) "
+        "OR (last_seen>=? AND status!='offline')",
+        (now, jid, now - 20),
+    )
+    connection.execute(
+        "DELETE FROM scheduler_decisions WHERE job_id=?",
+        (jid,),
+    )
+    connection.execute(
+        "DELETE FROM tasks WHERE job_id=?",
+        (jid,),
+    )
+
+
 @app.post("/api/jobs/{jid}/cancel")
 def cancel_job(jid: str):
     connection = db()
@@ -514,20 +539,10 @@ def cancel_job(jid: str):
     if job_row["status"] == "cancelled":
         connection.close()
         return {"ok": True, "status": "cancelled"}
-
     now = time.time()
+    purge_stopped_job_tasks(connection, jid, now)
     connection.execute(
-        "UPDATE tasks SET status='cancelled', error='Cancelled by user' "
-        "WHERE job_id=? AND status!='completed'",
-        (jid,),
-    )
-    connection.execute(
-        "UPDATE workers SET status='idle', active=NULL, last_seen=? "
-        "WHERE id IN (SELECT worker FROM tasks WHERE job_id=? AND status='cancelled' AND worker IS NOT NULL)",
-        (now, jid),
-    )
-    connection.execute(
-        "UPDATE jobs SET status='cancelled', completed_at=? WHERE id=?",
+        "UPDATE jobs SET status='cancelled', completed_at=?, done=0, total=0 WHERE id=?",
         (now, jid),
     )
     connection.commit()
@@ -1009,16 +1024,18 @@ async def claim(
 
     task = connection.execute(
         """
-        SELECT *
+        SELECT tasks.*
         FROM tasks
-        WHERE status='queued'
+        JOIN jobs ON jobs.id=tasks.job_id
+        WHERE tasks.status='queued'
+          AND jobs.status IN ('queued', 'processing')
         ORDER BY
             CASE
-                WHEN priority IS NULL THEN 0
-                ELSE priority
+                WHEN tasks.priority IS NULL THEN 0
+                ELSE tasks.priority
             END DESC,
-            attempts ASC,
-            chunk ASC
+            tasks.attempts ASC,
+            tasks.chunk ASC
         LIMIT 1
         """
     ).fetchone()
@@ -1032,6 +1049,14 @@ async def claim(
         return {
             "task": None
         }
+
+    chunk_path = Path(task['chunk_path'] or '')
+    if not chunk_path.is_file():
+        reason = f"Input chunk is missing: {chunk_path}"
+        mark_job_input_missing(connection, task["job_id"], reason)
+        connection.commit()
+        connection.close()
+        return {"task": None}
 
     selected, candidates = choose_worker(connection, task)
 
@@ -1148,17 +1173,55 @@ async def claim(
 # TASK INPUT
 # ============================================================
 
+def mark_job_input_missing(connection, job_id, reason):
+    now = time.time()
+    connection.execute(
+        """
+        UPDATE workers
+        SET status='idle', active=NULL, last_seen=?
+        WHERE active IN (
+            SELECT id FROM tasks
+            WHERE job_id=? AND status NOT IN ('completed', 'cancelled', 'failed')
+        )
+        """,
+        (now, job_id),
+    )
+    connection.execute(
+        """
+        UPDATE tasks
+        SET status='failed', worker=NULL, error=?
+        WHERE job_id=? AND status NOT IN ('completed', 'cancelled')
+        """,
+        (reason, job_id),
+    )
+    connection.execute(
+        """
+        UPDATE jobs
+        SET status='failed', completed_at=?
+        WHERE id=? AND status NOT IN ('completed', 'cancelled')
+        """,
+        (now, job_id),
+    )
+
+
 @app.get("/api/tasks/{tid}/status")
 def task_status(tid: str):
     connection = db()
     task = connection.execute(
-        "SELECT status FROM tasks WHERE id=?",
+        """
+        SELECT tasks.status, COALESCE(workers.disconnect_requested, 0) AS disconnect_requested
+        FROM tasks
+        LEFT JOIN workers ON workers.id=tasks.worker
+        WHERE tasks.id=?
+        """,
         (tid,),
     ).fetchone()
     connection.close()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    return {"status": task["status"]}
+    return {
+        "status": "cancelled" if task["disconnect_requested"] else task["status"]
+    }
 
 @app.get("/api/tasks/{tid}/input")
 def task_input(tid: str):
@@ -1167,7 +1230,7 @@ def task_input(tid: str):
 
     task = connection.execute(
         """
-        SELECT chunk_path
+        SELECT id, job_id, chunk_path, status, error
         FROM tasks
         WHERE id=?
         """,
@@ -1183,16 +1246,20 @@ def task_input(tid: str):
             detail="Task not found"
         )
 
-    path = Path(
-        task["chunk_path"]
-    )
-
-    if not path.exists():
-
+    if task["status"] == "failed":
         raise HTTPException(
-            status_code=404,
-            detail="Chunk file not found"
+            status_code=410,
+            detail=task["error"] or "Task input is no longer available",
         )
+
+    path = Path(task["chunk_path"] or "")
+    if not path.is_file():
+        connection = db()
+        reason = f"Input chunk is missing: {path}"
+        mark_job_input_missing(connection, task["job_id"], reason)
+        connection.commit()
+        connection.close()
+        raise HTTPException(status_code=410, detail=reason)
 
     return FileResponse(
         path,
@@ -1235,9 +1302,9 @@ async def complete(
         "SELECT status FROM jobs WHERE id=?",
         (task["job_id"],),
     ).fetchone()
-    if task["status"] == "cancelled" or (job_state and job_state["status"] == "cancelled"):
+    if task["status"] in ("cancelled", "failed") or (job_state and job_state["status"] in ("cancelled", "failed")):
         connection.close()
-        raise HTTPException(status_code=409, detail="Job was cancelled")
+        raise HTTPException(status_code=409, detail="Job is cancelled or failed")
 
     output_directory = (
         OUT
@@ -1414,9 +1481,9 @@ async def fail(
 
     if task:
 
-        if task["status"] == "cancelled":
+        if task["status"] in ("cancelled", "failed"):
             connection.close()
-            return {"ok": True, "status": "cancelled"}
+            return {"ok": True, "status": task["status"]}
 
         connection.execute(
             """
@@ -1697,10 +1764,12 @@ async def reaper():
 
         stale_tasks = connection.execute(
             """
-            SELECT id, worker
+            SELECT tasks.id, tasks.worker
             FROM tasks
-            WHERE status IN ('processing','assigned','downloading','transcoding','uploading')
-            AND started<?
+            JOIN jobs ON jobs.id=tasks.job_id
+            WHERE tasks.status IN ('processing','assigned','downloading','transcoding','uploading')
+              AND tasks.started<?
+              AND jobs.status IN ('queued', 'processing')
             """,
             (cutoff,),
         ).fetchall()
@@ -1716,6 +1785,12 @@ async def reaper():
                     worker=NULL,
                     error='timeout; requeued'
                 WHERE id=?
+                  AND status IN ('processing','assigned','downloading','transcoding','uploading')
+                  AND EXISTS (
+                      SELECT 1 FROM jobs
+                      WHERE jobs.id=tasks.job_id
+                        AND jobs.status IN ('queued', 'processing')
+                  )
                 """,
                 (task["id"],),
             )
