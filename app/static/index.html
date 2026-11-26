@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f3ede3"><title>DistriStream</title>
 <script>document.documentElement.dataset.theme=localStorage.getItem('dvl-theme')||'coffee';</script>
-<link rel="stylesheet" href="/static/css/app.css?v=ui-polish-20261125-1">
+<link rel="stylesheet" href="/static/css/app.css?v=distristream-ui-20261126-1">
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </head>
 <body>
@@ -15,8 +15,26 @@
     <div class="side-status"><div class="eyebrow">CLUSTER STATUS</div><div class="side-line"><span class="dot green"></span> Coordinator <b id="coordinatorStatus">ONLINE</b></div><div class="side-line"><span class="dot green"></span> Workers <b id="sideWorkers">—</b></div><div class="side-foot"><span class="pulse"></span> API connection <span id="apiStatus">connecting</span></div></div>
     <div class="profile"><div class="avatar">DV</div><div><b>Video Lab</b><small>Research workspace</small></div><span class="more">···</span></div>
   </aside>
-  <main class="main"><header class="topbar"><div class="crumb"><strong id="crumbTitle">Dashboard</strong></div><div class="top-actions"><button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to dark mode"><span class="theme-icon">☼</span><span class="theme-name">Coffee light</span></button><span class="live-label"><i class="pulse"></i> LIVE</span><span id="lastUpdated">—</span><button class="icon-button" id="refreshButton" title="Refresh">↻</button><button class="user-button">DV</button></div></header><div id="view" class="content"></div></main>
+  <main class="main"><header class="topbar"><div class="crumb"><button class="icon-button menu-toggle" id="menuToggle" type="button" aria-label="Collapse menu" aria-expanded="true" title="Collapse menu">☰</button><strong id="crumbTitle">Dashboard</strong></div><div class="top-actions"><button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to dark mode"><span class="theme-icon">☼</span><span class="theme-name">Coffee light</span></button><span class="live-label"><i class="pulse"></i> LIVE</span><span id="lastUpdated">—</span><button class="icon-button" id="refreshButton" title="Refresh">↻</button><button class="user-button">DV</button></div></header><div id="view" class="content"></div></main>
 </div>
 <div id="drawerRoot"></div>
-<script type="module" src="/static/js/app.js?v=distristream-brand-20261125-1"></script>
+<script>
+(() => {
+  const shell = document.querySelector('.shell');
+  const toggle = document.getElementById('menuToggle');
+  shell.classList.remove('menu-collapsed');
+  const sync = () => {
+    const expanded = !shell.classList.contains('menu-collapsed');
+    toggle.setAttribute('aria-expanded', String(expanded));
+    toggle.setAttribute('aria-label', expanded ? 'Collapse menu' : 'Expand menu');
+    toggle.title = expanded ? 'Collapse menu' : 'Expand menu';
+  };
+  toggle.addEventListener('click', () => {
+    shell.classList.toggle('menu-collapsed');
+    sync();
+  });
+  sync();
+})();
+</script>
+<script type="module" src="/static/js/app.js?v=distristream-ui-20261126-5"></script>
 </body></html>

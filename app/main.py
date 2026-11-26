@@ -40,6 +40,27 @@ from fastapi.staticfiles import StaticFiles
 
 BASE = Path(__file__).resolve().parent.parent
 
+
+def configure_ffmpeg_path():
+    """Make portable WinGet FFmpeg installs available to coordinator subprocesses."""
+    candidates = []
+    configured_bin = os.getenv("FFMPEG_BIN")
+    if configured_bin:
+        candidates.append(Path(configured_bin))
+    local_app_data = Path(os.getenv("LOCALAPPDATA", Path.home() / "AppData/Local"))
+    winget_packages = local_app_data / "Microsoft/WinGet/Packages"
+    candidates.extend(winget_packages.glob("Gyan.FFmpeg*/*/bin"))
+
+    for directory in candidates:
+        if (directory / "ffmpeg.exe").is_file() and (directory / "ffprobe.exe").is_file():
+            current = os.environ.get("PATH", "").split(os.pathsep)
+            if str(directory) not in current:
+                os.environ["PATH"] = str(directory) + os.pathsep + os.environ.get("PATH", "")
+            return
+
+
+configure_ffmpeg_path()
+
 ST = (
     Path("/tmp/distristream-storage")
     if os.getenv("VERCEL")
@@ -156,6 +177,7 @@ def init():
             ("completed_at", "REAL"),
             ("scheduler_mode", "TEXT"),
             ("manual_workers", "TEXT"),
+            ("source_metadata", "TEXT"),
         ],
         "tasks": [
             ("complexity", "REAL"),
@@ -501,6 +523,10 @@ def job(jid: str):
     result["profiles"] = json.loads(
         result["profiles"]
     )
+    try:
+        result["source_metadata"] = json.loads(result.get("source_metadata") or "{}")
+    except (TypeError, ValueError):
+        result["source_metadata"] = {}
 
     result["tasks"] = [
         dict(task)
@@ -609,6 +635,9 @@ def job_metrics(jid: str):
         """
         SELECT
             COUNT(*) AS count,
+            SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS completed,
+            COUNT(DISTINCT CASE WHEN status='completed' THEN worker END) AS workers_used,
+            SUM(CASE WHEN status='completed' THEN COALESCE(processing_time, 0) ELSE 0 END) AS serial_processing,
             AVG(queue_time) AS avg_queue,
             AVG(download_time) AS avg_download,
             AVG(processing_time) AS avg_processing,
@@ -620,9 +649,16 @@ def job_metrics(jid: str):
     ).fetchone()
     connection.close()
 
+    now = time.time()
     total_time = None
-    if job["completed_at"] and job["started_at"]:
-        total_time = round(job["completed_at"] - job["started_at"], 4)
+    if job["started_at"]:
+        total_time = round((job["completed_at"] or now) - job["started_at"], 4)
+    serial_time = float(task_metrics["serial_processing"] or 0)
+    completed_count = int(task_metrics["completed"] or 0)
+    workers_used = int(task_metrics["workers_used"] or 0)
+    throughput = completed_count / total_time if total_time and total_time > 0 else None
+    speedup = serial_time / total_time if serial_time > 0 and total_time and total_time > 0 else None
+    utilization = min(100.0, serial_time / (total_time * workers_used) * 100) if total_time and total_time > 0 and workers_used else None
 
     return {
         "job_id": jid,
@@ -630,6 +666,10 @@ def job_metrics(jid: str):
         "chunking_time": job["chunking_time"],
         "analysis_time": job["analysis_time"],
         "total_job_time": total_time,
+        "throughput_tasks_per_second": round(throughput, 4) if throughput is not None else None,
+        "serial_transcode_time": round(serial_time, 4),
+        "speedup": round(speedup, 4) if speedup is not None else None,
+        "worker_utilization_percent": round(utilization, 2) if utilization is not None else None,
         "average_queue_time": round(task_metrics["avg_queue"] or 0, 4),
         "average_download_time": round(task_metrics["avg_download"] or 0, 4),
         "average_processing_time": round(task_metrics["avg_processing"] or 0, 4),
@@ -671,16 +711,54 @@ def duration(video_path: Path):
         return 0
 
 
-def video_dimensions(video_path: Path):
-    """Return source video width and height from ffprobe metadata."""
+def probe_video(video_path: Path):
+    """Read video dimensions, codec, and frame rate from the first stream."""
     try:
         result = subprocess.check_output(
             [
                 "ffprobe",
                 "-v", "error",
                 "-select_streams", "v:0",
-                "-show_entries", "stream=width,height",
+                "-show_entries", "stream=width,height,codec_name,avg_frame_rate,r_frame_rate",
                 "-of", "json",
+                str(video_path),
+            ],
+            stderr=subprocess.STDOUT,
+        )
+        streams = json.loads(result.decode()).get("streams", [])
+        if not streams:
+            return {}
+        stream = streams[0]
+        fps = None
+        for rate in (stream.get("avg_frame_rate"), stream.get("r_frame_rate")):
+            if not rate or rate in ("0/0", "N/A"):
+                continue
+            try:
+                numerator, separator, denominator = rate.partition("/")
+                divisor = float(denominator) if separator else 1
+                value = float(numerator) / divisor if divisor else 0
+                if value > 0:
+                    fps = round(value, 3)
+                    break
+            except (ValueError, ZeroDivisionError):
+                continue
+        return {
+            "width": int(stream["width"]),
+            "height": int(stream["height"]),
+            "codec": stream.get("codec_name"),
+            "fps": fps,
+        }
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError, KeyError, ValueError, TypeError):
+        return {}
+
+
+def video_dimensions(video_path: Path):
+    """Keep source validation independent of optional codec/FPS metadata."""
+    try:
+        result = subprocess.check_output(
+            [
+                "ffprobe", "-v", "error", "-select_streams", "v:0",
+                "-show_entries", "stream=width,height", "-of", "json",
                 str(video_path),
             ],
             stderr=subprocess.STDOUT,
@@ -689,7 +767,7 @@ def video_dimensions(video_path: Path):
         if not streams:
             return None, None
         return int(streams[0]["width"]), int(streams[0]["height"])
-    except (Exception, KeyError, ValueError, TypeError):
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError, KeyError, ValueError, TypeError):
         return None, None
 
 
@@ -705,6 +783,8 @@ async def upload(
     ),
     scheduler_mode: str = Form("intelligent"),
     manual_workers: str = Form(""),
+    source_width: int | None = Form(None),
+    source_height: int | None = Form(None),
 ):
     upload_started = time.time()
 
@@ -761,7 +841,11 @@ async def upload(
 
             file.write(chunk)
 
-    _, source_height = video_dimensions(source)
+    source_metadata = probe_video(source)
+    probed_width, probed_height = video_dimensions(source)
+    source_metadata.setdefault("width", probed_width or source_width)
+    source_metadata.setdefault("height", probed_height or source_height)
+    source_height = probed_height or source_height
     if not source_height:
         source.unlink(missing_ok=True)
         raise HTTPException(
@@ -904,9 +988,10 @@ async def upload(
         INSERT INTO jobs(
             id, filename, source, duration, status, profiles,
             total, done, created, upload_time, chunking_time,
-            analysis_time, started_at, scheduler_mode, manual_workers
+            analysis_time, started_at, scheduler_mode, manual_workers,
+            source_metadata
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             job_id,
@@ -926,6 +1011,7 @@ async def upload(
             time.time(),
             scheduler_mode,
             json.dumps(manual_worker_names),
+            json.dumps(source_metadata),
         ),
     )
 

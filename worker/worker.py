@@ -1,4 +1,6 @@
 import argparse
+import os
+import shutil
 import socket
 import time
 import uuid
@@ -10,6 +12,29 @@ from pathlib import Path
 
 import requests
 import psutil
+
+
+def configure_ffmpeg_path():
+    """Find portable WinGet installs, while retaining PATH-based Linux/macOS support."""
+    if shutil.which("ffmpeg"):
+        return
+
+    candidates = []
+    configured_bin = os.getenv("FFMPEG_BIN")
+    if configured_bin:
+        candidates.append(Path(configured_bin))
+    local_app_data = Path(os.getenv("LOCALAPPDATA", Path.home() / "AppData/Local"))
+    candidates.extend(
+        (local_app_data / "Microsoft/WinGet/Packages").glob("Gyan.FFmpeg*/*/bin")
+    )
+
+    for directory in candidates:
+        if (directory / "ffmpeg.exe").is_file():
+            os.environ["PATH"] = str(directory) + os.pathsep + os.environ.get("PATH", "")
+            return
+
+
+configure_ffmpeg_path()
 
 
 # ============================================================
@@ -126,6 +151,12 @@ def task_is_cancelled(task_id):
 
 
 def run_ffmpeg(command, task_id):
+    if not shutil.which(command[0]):
+        raise RuntimeError(
+            "FFmpeg is not installed or is not available to this worker. "
+            "On Windows, run `winget install --id Gyan.FFmpeg.Shared --exact`, "
+            "then restart the worker terminal."
+        )
     if task_is_cancelled(task_id):
         raise TaskCancelled("Job was cancelled")
     started = time.time()
